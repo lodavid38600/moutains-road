@@ -110,6 +110,7 @@ log(`Fusion : ${used.size} liens Wikidata (dont ${matched} par nom/proximité)`)
 const all = [...osm.values()];
 for (const w of wd.values()) if (!used.has(w.id)) { classify(w); all.push(w); }
 for (const f of all) {
+  classify(f); // règles de classement à jour, même pour des collectes plus anciennes
   const r = regionOf(f);
   if (r) f.r = r;
   if ((f.k === 'route' || f.k === 'ferrata') && f.km && !f.h) {

@@ -73,7 +73,8 @@ export function accessSentence(f) {
   }
   if (a.vf != null) return { c: 'ferrata', text: 'Sommet accessible par une via ferrata', detail: FERRATA_PLAIN[a.vf] };
   if (a.nw > 0) return { c: 'rando', text: 'Un sentier mène au sommet', detail: 'Difficulté non renseignée dans OpenStreetMap' };
-  return { c: 'alpinisme', text: 'Pas de sentier : terrain d’alpinisme', detail: 'Aucun chemin cartographié à moins de 150 m du sommet' };
+  if (f.c === 'alpinisme') return { c: 'alpinisme', text: 'Pas de sentier : terrain d’alpinisme', detail: 'Haute montagne sans chemin cartographié jusqu’au sommet' };
+  return { c: 'none', text: 'Pas de sentier balisé jusqu’au sommet', detail: 'Accès hors sentier : orientation et pied sûr nécessaires' };
 }
 
 export const NETWORKS = {

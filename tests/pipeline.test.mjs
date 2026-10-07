@@ -21,6 +21,7 @@ test('parseOverpass : itinéraire, difficulté, accès au sommet', () => {
       { type: 'way', id: 10, tags: { highway: 'path', sac_scale: 'hiking' }, geometry: line(45.0, 6.05, 45.05, 6.05) },
       { type: 'node', id: 100, lat: 45.1, lon: 6.05, tags: { natural: 'peak', name: 'Pic Test', ele: '2 345' } },
       { type: 'node', id: 101, lat: 46.0, lon: 7.0, tags: { natural: 'peak', name: 'Pic Sauvage', ele: '3800' } },
+      { type: 'node', id: 103, lat: 42.0, lon: 9.0, tags: { natural: 'peak', name: 'Colline du maquis', ele: '420' } },
       { type: 'node', id: 102, lat: 46.0, lon: 7.1, tags: { sport: 'climbing', leisure: 'sports_centre', name: 'Salle' } },
     ],
   };
@@ -37,6 +38,8 @@ test('parseOverpass : itinéraire, difficulté, accès au sommet', () => {
   assert.equal(byId.n100.c, 'montagne');
   assert.equal(byId.n101.c, 'alpinisme');
   assert.equal(accessSentence(byId.n101).text, 'Pas de sentier : terrain d’alpinisme');
+  assert.equal(byId.n103.c, undefined, 'une colline sans sentier n’est pas de l’alpinisme');
+  assert.equal(accessSentence(byId.n103).text, 'Pas de sentier balisé jusqu’au sommet');
   assert.equal(byId.n102, undefined, 'salle d’escalade exclue');
 });
 

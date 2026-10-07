@@ -46,7 +46,7 @@ function keyFacts(f) {
     return [
       { v: f.e != null ? num(f.e) : '—', u: f.e != null ? 'm' : '', l: 'Altitude' },
       { v: f.pr != null ? num(f.pr) : '—', u: f.pr != null ? 'm' : '', l: 'Proéminence' },
-      { v: acc ? acc.code : f.acc ? (f.acc.nw ? 'Sentier' : 'Alpi.') : '—', u: '', l: 'Accès' },
+      { v: acc ? acc.code : f.acc ? (f.acc.nw ? 'Sentier' : f.c === 'alpinisme' ? 'Alpi.' : 'Hors sentier') : '—', u: '', l: 'Accès' },
     ];
   }
   if (f.k === 'hut' || f.k === 'shelter') {
@@ -88,7 +88,7 @@ function heroHtml(f, photos) {
   const c = f.c ? `var(--cat-${f.c})` : 'var(--cat-none)';
   if (!photos.length) return `<div class="hero small" style="--c:${c}"><div class="hero-icon">${icon(f.k, { color: '#fff', size: 36, width: 1.8 })}</div></div>`;
   return `<div class="hero" style="--c:${c}">
-    <div class="hero-strip">${photos.slice(0, 8).map((p, i) => `<button data-photo="${i}" aria-label="Agrandir la photo ${i + 1}"><img src="${esc(p.thumb)}" alt="" loading="${i ? 'lazy' : 'eager'}" onerror="this.parentElement.remove()"></button>`).join('')}</div>
+    <div class="hero-strip">${photos.slice(0, 8).map((p, i) => `<button data-photo="${i}" aria-label="Agrandir la photo ${i + 1}"><img src="${esc(p.thumb)}" alt="" loading="${i ? 'lazy' : 'eager'}" onerror="mrHeroError(this)"></button>`).join('')}</div>
     ${photos.length > 1 ? `<span class="hero-count">1 / ${Math.min(8, photos.length)}</span>` : ''}
   </div>`;
 }
@@ -162,6 +162,16 @@ export async function showDetail(f, { fit = true } = {}) {
   // Infos Wikidata pour les objets OSM liés mais pas encore enrichis (mode direct).
   if (f.wd && !f.sl) enrichWikidata(f);
 }
+
+// Photo introuvable : on la retire ; s'il n'en reste aucune, l'en-tête se réduit.
+window.mrHeroError = (img) => {
+  const hero = img.closest('.hero');
+  img.parentElement.remove();
+  if (hero && !hero.querySelector('.hero-strip button')) {
+    hero.classList.add('small');
+    hero.innerHTML = `<div class="hero-icon">${icon(current?.k || 'peak', { color: '#fff', size: 36, width: 1.8 })}</div>`;
+  } else hero?.querySelector('.hero-count')?.remove();
+};
 
 function bindHero(root, photos) {
   root.querySelectorAll('[data-photo]').forEach((b) => b.addEventListener('click', () => openLightbox(photos, +b.dataset.photo)));

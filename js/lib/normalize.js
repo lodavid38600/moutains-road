@@ -22,6 +22,9 @@ import {
   parseSacList, parseFerrataList, parseMeters, parseDistanceKm, categoryFromSac, estimateHours,
 } from './categories.js';
 
+/** Altitude à partir de laquelle un sommet sans sentier est considéré comme de l'alpinisme. */
+export const ALPINE_ALT = 2500;
+
 /** Tags OSM conservés dans `tg` (le reste est trop technique ou redondant). */
 const KEEP_TAGS = [
   'name', 'name:fr', 'name:en', 'name:de', 'name:it', 'alt_name', 'old_name', 'official_name',
@@ -211,7 +214,8 @@ export function classify(f) {
       if (f.acc.t) f.c = categoryFromSac(f.acc.t);
       else if (f.acc.vf != null) f.c = 'ferrata';
       else if (f.acc.nw > 0) f.c = 'rando'; // chemin sans cotation SAC
-      else f.c = 'alpinisme'; // aucun chemin à < 150 m du sommet
+      // Aucun chemin à < 150 m : alpinisme en haute montagne, simple hors-sentier ailleurs.
+      else if (f.e >= ALPINE_ALT) f.c = 'alpinisme';
     } else if (f.t) {
       f.c = categoryFromSac(f.t);
     }
