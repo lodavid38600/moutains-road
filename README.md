@@ -40,11 +40,13 @@ Sans données collectées, le site fonctionne en mode direct. Pour avoir toute l
 npm run harvest      # Wikidata (monde) + OpenStreetMap (massifs) + dénivelés + assemblage
 ```
 
-Ou, plus rapide, récupérez les données déjà publiées par la version en ligne :
+Ou, plus rapide, récupérez les données déjà collectées par GitHub Actions (branche `data`) :
 
 ```bash
-npm run download-data -- --from=https://<compte>.github.io/<dépôt>/
+git fetch origin data && mkdir -p data && git --work-tree=data checkout origin/data -- . && git reset -q
 ```
+
+(ou depuis le site publié : `npm run download-data -- --from=https://<compte>.github.io/<dépôt>/`)
 
 Commandes détaillées :
 

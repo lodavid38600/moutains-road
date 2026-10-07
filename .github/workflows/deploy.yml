@@ -22,7 +22,7 @@ on:
         default: '30'
 
 permissions:
-  contents: read
+  contents: write   # publication des données sur la branche « data »
   pages: write
   id-token: write
 
@@ -77,6 +77,20 @@ jobs:
       - name: Assemblage des données
         run: |
           if [ -d .cache/raw ]; then node scripts/build-data.mjs; else echo "Pas encore de collecte : le site fonctionnera en mode direct."; fi
+
+      # Les données assemblées sont aussi publiées sur la branche « data » (sans historique),
+      # pour les utiliser en local : git fetch origin data && git --work-tree=data checkout origin/data -- .
+      - name: Publier les données sur la branche data
+        if: github.event_name != 'push' && hashFiles('data/meta.json') != ''
+        run: |
+          cd data
+          git init -q -b data
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Données du $(date -u +%Y-%m-%d)"
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" data
+          rm -rf .git
 
       - name: Préparation du site
         run: |
