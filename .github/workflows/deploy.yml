@@ -35,8 +35,10 @@ jobs:
     if: github.event_name != 'push' || github.ref_name == github.event.repository.default_branch
     runs-on: ubuntu-latest
     timeout-minutes: 340
+    outputs:
+      pages: ${{ steps.pages.outcome }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # La collecte complète prend plus que les 6 h d'un job : chaque exécution avance
       # jusqu'à son heure limite, publie, et la suivante reprend grâce au cache.
@@ -45,7 +47,7 @@ jobs:
           echo "DEADLINE_WIKIDATA=$(( $(date +%s) + 90*60 ))" >> $GITHUB_ENV
           echo "DEADLINE=$(( $(date +%s) + 290*60 ))" >> $GITHUB_ENV
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
 
@@ -95,21 +97,27 @@ jobs:
       - name: Préparation du site
         run: |
           mkdir -p _site
-          cp -r index.html manifest.webmanifest css js vendor assets _site/
+          cp -r index.html 404.html sw.js robots.txt manifest.webmanifest css js vendor assets _site/
           if [ -f data/meta.json ]; then cp -r data _site/; fi
           touch _site/.nojekyll
           du -sh _site
 
-      # Échoue tant que Pages n'est pas activé (Settings → Pages → Source : GitHub Actions) ;
-      # la collecte et l'artefact restent utilisables.
-      - uses: actions/configure-pages@v5
+      # Tant que Pages n'est pas activé (Settings → Pages → Source : GitHub Actions),
+      # la publication est sautée avec un avertissement au lieu de mettre le workflow en échec.
+      - id: pages
+        uses: actions/configure-pages@v5
         continue-on-error: true
-      - uses: actions/upload-pages-artifact@v3
+      - name: GitHub Pages non activé
+        if: steps.pages.outcome != 'success'
+        run: echo "::warning title=GitHub Pages non activé::Activez Settings → Pages → Source « GitHub Actions » pour publier le site. Les données sont tout de même disponibles sur la branche data."
+      - if: steps.pages.outcome == 'success'
+        uses: actions/upload-pages-artifact@v4
         with:
           path: _site
 
   deploy:
     needs: build
+    if: needs.build.outputs.pages == 'success'
     runs-on: ubuntu-latest
     environment:
       name: github-pages

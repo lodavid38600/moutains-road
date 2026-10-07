@@ -379,5 +379,10 @@ onChange((what) => {
   if (id) openById(id, ll?.[0], ll?.[1]);
 })();
 
+// Hors ligne : service worker (pas en développement sur localhost pour éviter les caches gênants).
+if ('serviceWorker' in navigator && !['localhost', '127.0.0.1'].includes(location.hostname)) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+
 // Expose pour le débogage dans la console.
 window.mountains = { store, filters, M, openById, currentFeature, altOf, isRoute };
