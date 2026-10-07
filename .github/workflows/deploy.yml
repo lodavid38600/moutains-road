@@ -79,7 +79,10 @@ jobs:
           touch _site/.nojekyll
           du -sh _site
 
+      # Échoue tant que Pages n'est pas activé (Settings → Pages → Source : GitHub Actions) ;
+      # la collecte et l'artefact restent utilisables.
       - uses: actions/configure-pages@v5
+        continue-on-error: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
