@@ -44,7 +44,8 @@ jobs:
       # jusqu'à son heure limite, publie, et la suivante reprend grâce au cache.
       - name: Heures limites
         run: |
-          echo "DEADLINE_WIKIDATA=$(( $(date +%s) + 90*60 ))" >> $GITHUB_ENV
+          echo "DEADLINE_WIKIDATA=$(( $(date +%s) + 80*60 ))" >> $GITHUB_ENV
+          echo "DEADLINE_C2C=$(( $(date +%s) + 130*60 ))" >> $GITHUB_ENV
           echo "DEADLINE=$(( $(date +%s) + 290*60 ))" >> $GITHUB_ENV
 
       - uses: actions/setup-node@v5
@@ -64,6 +65,10 @@ jobs:
       - name: Collecte Wikidata (sommets du monde entier)
         if: github.event_name != 'push' && inputs.countries != 'none'
         run: node scripts/harvest-wikidata.mjs --max-age=${{ inputs.max_age || 30 }} ${{ inputs.countries && inputs.countries != 'all' && format('--countries={0}', inputs.countries) || '' }}
+
+      - name: Collecte Camptocamp (voies d'alpinisme, escalade, randonnée)
+        if: github.event_name != 'push' && inputs.regions != 'none'
+        run: node scripts/harvest-camptocamp.mjs --max-age=${{ inputs.max_age || 30 }} --regions=${{ inputs.regions || 'all' }}
 
       - name: Collecte OpenStreetMap + dénivelés
         if: github.event_name != 'push' && inputs.regions != 'none'

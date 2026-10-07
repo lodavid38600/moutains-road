@@ -10,21 +10,27 @@ uniquement de sources ouvertes.
 
 ## Ce que fait le site
 
-- **Accueil épuré** : carte plein écran, recherche et cinq catégories (Rando, Rando montagne, Rando alpine,
-  Alpinisme, Via ferrata). Les filtres avancés (D+, durée, distance, difficulté, altitude, boucles, type de
-  sentier…) sont dans un panneau qu'on n'ouvre que si besoin.
-- **Fiches en 3 niveaux** :
-  1. l'essentiel : photo, nom, catégorie, difficulté en mots simples, distance, D+, durée, altitude max ;
-  2. profil d'altitude interactif (relié à la carte), accès au sommet, météo à 7 jours à l'altitude du sommet,
-     description Wikipedia, photos du secteur, lieux à proximité ;
-  3. replié : cotations détaillées, sources et méthode de calcul, liens externes, tags OpenStreetMap bruts.
-- **Le D+ partout** : il est calculé pendant la collecte pour chaque itinéraire. On peut filtrer
-  (« moins de 800 m ») et trier dessus, et il s'affiche sur chaque carte de la liste.
-- **Mobile d'abord** : la fiche monte depuis le bas de l'écran (à moitié ou en plein écran), avec de grandes
-  zones tactiles. Sur ordinateur, elle s'affiche en panneau latéral.
-- **Export GPX**, partage de lien, itinéraire routier jusqu'au départ.
-- **Mode direct** : hors des massifs collectés, le site interroge OpenStreetMap en direct (bouton
-  « Charger cette zone »). Le dénivelé y est aussi calculé, dans le navigateur.
+Un site classique, organisé en pages, dont la carte n'est qu'un outil parmi d'autres :
+
+- **Accueil** : recherche, les cinq activités (Rando, Rando montagne, Rando alpine, Alpinisme, Via ferrata),
+  les massifs, les sommets emblématiques, les sorties de moins de 800 m de D+, les grandes traversées.
+- **Explorer** : le catalogue d'un massif, un onglet par type (itinéraires, sommets, refuges, via ferrata,
+  escalade, cols) et des filtres adaptés à chacun : D+, distance, durée, difficulté T1–T6, accès au sommet,
+  altitude, proéminence, réseau (GR, PR…), boucles. Les filtres sont dans l'URL (liens partageables).
+- **Page sommet** : toutes les manières d'y monter, comparées sur un même graphique et sur la carte :
+  - les **voies par les sentiers**, calculées sur le réseau OpenStreetMap depuis chaque parking, refuge ou
+    accès routier proche (voies réellement distinctes, avec distance, D+, durée de montée et aller-retour,
+    difficulté, profil détaillé, GPX) ;
+  - les **itinéraires balisés** qui passent par le sommet (portion jusqu'au sommet) ;
+  - les **voies Camptocamp** (alpinisme, escalade, randonnée, ski…) avec cotation, D+ et versant.
+  Plus : accès au sommet en mots simples, météo à l'altitude du sommet, photos, lieux à proximité.
+- **Page itinéraire** : profil d'altitude détaillé (aire colorée selon la pente, sommets, cols et refuges
+  placés sur la courbe, survol relié à la carte avec altitude, pente et D+ cumulé), statistiques
+  (pente max, part du parcours à plus de 25 %), **étapes** de refuge en refuge, **tronçons et variantes**
+  avec leurs profils comparés, sommets traversés, météo au point culminant, GPX.
+- **Pages refuge / col / escalade**, **pages massif**, **carte** (exploration libre, aperçu puis fiche),
+  **guide des cotations**, **statistiques**, **sources et méthode**.
+- Hors des massifs collectés, la carte et les fiches interrogent OpenStreetMap en direct (dénivelé compris).
 
 ## Lancer en local
 
@@ -53,6 +59,7 @@ Commandes détaillées :
 | Commande | Rôle |
 |---|---|
 | `npm run harvest:wikidata` | Sommets, volcans et cols du monde entier (altitude, proéminence, photo, massif, Wikipedia) |
+| `npm run harvest:c2c` | Voies Camptocamp des massifs (alpinisme, escalade, randonnée…), rattachées aux sommets |
 | `npm run harvest:osm -- --regions=alpes-nord,pyrenees` | Itinéraires, sommets, refuges, via ferrata, escalade des massifs choisis + calcul du D+ |
 | `npm run build:data` | Assemble le tout dans `data/` (tuiles, tracés, index de recherche, statistiques) |
 | `npm test` | Tests du pipeline (analyse OSM, dénivelé, décodage du terrain…) |
@@ -86,12 +93,13 @@ Le workflow [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) :
 
 ```
 index.html, css/style.css      interface
-js/app.js                      assemblage : carte, recherche, catégories, liste, fiche
-js/detail.js                   fiche en 3 niveaux
-js/store.js                    chargement des données, filtres, recherche, mode direct
-js/map.js, js/sheet.js         carte Leaflet, feuille glissante mobile
+js/app.js, js/router.js        en-tête (menu, recherche, thème) et routeur des pages (#/…)
+js/pages/                      accueil, explorer, sommet, itinéraire, lieu, massif(s), carte, guide…
+js/components/                 profils d'altitude, fiches de liste, météo, photos, éléments de détail
+js/data.js                     chargement des données (collecte statique + direct), recherche
+js/map.js                      cartes Leaflet réutilisables
 js/lib/                        code partagé navigateur + Node : requêtes Overpass, normalisation,
-                               catégories et textes simples, dénivelé (MNT), géométrie
+                               catégories, dénivelé (MNT), voies d'ascension (ascent.js), géométrie
 scripts/                       collecte (Overpass, Wikidata, MNT), assemblage, serveur local
 vendor/                        Leaflet et Leaflet.markercluster (embarqués, pas de CDN)
 ```
@@ -100,6 +108,7 @@ vendor/                        Leaflet et Leaflet.markercluster (embarqués, pas
 
 - © contributeurs [OpenStreetMap](https://www.openstreetmap.org/copyright) (ODbL)
 - [Wikidata](https://www.wikidata.org) (CC0), Wikipedia et Wikimedia Commons (CC BY-SA, crédits affichés)
+- [Camptocamp](https://www.camptocamp.org) (CC BY-SA) : voies d'alpinisme, d'escalade et de randonnée
 - [Terrain Tiles](https://registry.opendata.aws/terrain-tiles/) (Mapzen / AWS Open Data)
 - [Open-Meteo](https://open-meteo.com) (CC BY 4.0)
 - Fonds de carte : OpenTopoMap, OpenStreetMap, Esri, IGN, swisstopo, Waymarked Trails

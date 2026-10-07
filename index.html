@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Mountains Road · Randonnée en montagne</title>
-  <meta name="description" content="Randonnées, sommets, via ferrata et alpinisme : distance, dénivelé, durée, difficulté et météo, à partir des données ouvertes OpenStreetMap et Wikidata.">
+  <title>Mountains Road · Randonnée et alpinisme</title>
+  <meta name="description" content="Sommets, voies d'ascension, randonnées, via ferrata et alpinisme : distance, dénivelé, durée, difficulté, profils détaillés et météo, à partir de données ouvertes.">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="Mountains Road · Randonnée en montagne">
-  <meta property="og:description" content="Randonnées, sommets, via ferrata et alpinisme : distance, dénivelé, durée, difficulté et météo.">
+  <meta property="og:title" content="Mountains Road · Randonnée et alpinisme">
+  <meta property="og:description" content="Sommets, voies d'ascension, randonnées, via ferrata et alpinisme : distance, D+, durée, difficulté et météo.">
   <meta property="og:image" content="assets/og.png">
   <meta name="twitter:card" content="summary_large_image">
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
@@ -19,109 +19,68 @@
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-  <noscript><p style="padding:24px">Mountains Road a besoin de JavaScript pour afficher la carte.</p></noscript>
-  <div id="map" aria-label="Carte"></div>
+  <noscript><p style="padding:24px">Mountains Road a besoin de JavaScript.</p></noscript>
+  <a class="skip" href="#app">Aller au contenu</a>
 
-  <!-- Barre flottante : recherche + catégories -->
-  <header class="top">
-    <div class="searchbar" role="search">
-      <button class="sb-btn" id="btn-menu" aria-label="Menu" aria-haspopup="true" aria-expanded="false">
+  <header class="site-header">
+    <div class="hd-inner">
+      <a class="brand" href="#/" aria-label="Mountains Road, accueil">
+        <img src="assets/icon.svg" alt="" width="32" height="32">
+        <span>Mountains<b>Road</b></span>
+      </a>
+      <nav class="main-nav" id="main-nav" aria-label="Navigation principale">
+        <a href="#/explorer?type=routes" data-nav="explorer">Randonnées</a>
+        <a href="#/explorer?type=peaks" data-nav="sommets">Sommets</a>
+        <a href="#/explorer?type=huts" data-nav="refuges">Refuges</a>
+        <a href="#/massifs" data-nav="massifs">Massifs</a>
+        <a href="#/carte" data-nav="carte">Carte</a>
+        <a href="#/guide" data-nav="guide">Guide</a>
+      </nav>
+      <div class="hd-search" role="search">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+        <input id="search" type="search" placeholder="Sommet, randonnée, refuge, lieu…" autocomplete="off" aria-label="Rechercher" aria-controls="search-results" enterkeyhint="search">
+        <div id="search-results" class="search-results" role="listbox" hidden></div>
+      </div>
+      <button class="icon-btn" id="btn-theme" aria-label="Changer de thème" title="Thème clair / sombre / automatique">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+      </button>
+      <button class="icon-btn burger" id="btn-burger" aria-label="Menu" aria-controls="main-nav" aria-expanded="false">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
       </button>
-      <input id="search" type="search" placeholder="Rechercher un sommet, une rando, un refuge…" autocomplete="off"
-             aria-label="Rechercher" aria-controls="search-results" aria-autocomplete="list" enterkeyhint="search">
-      <button class="sb-btn" id="btn-filters" aria-label="Filtres avancés" aria-controls="filters" aria-expanded="false">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>
-        <span class="pill" id="filters-count" hidden></span>
-      </button>
-      <div id="search-results" class="search-results" role="listbox" hidden></div>
     </div>
-    <nav class="cats" id="cats" aria-label="Catégories"></nav>
   </header>
 
-  <!-- Menu principal -->
-  <div id="menu" class="popover menu" hidden role="menu">
-    <button role="menuitem" data-page="stats">Statistiques</button>
-    <button role="menuitem" data-page="guide">Comprendre les difficultés</button>
-    <button role="menuitem" data-page="data">Les données</button>
-    <hr>
-    <button role="menuitem" id="btn-theme">Thème : <span id="theme-name">auto</span></button>
-  </div>
+  <main id="app" tabindex="-1"></main>
 
-  <!-- Contrôles de carte -->
-  <div class="fabs">
-    <button class="fab" id="btn-layers" aria-label="Fonds de carte" aria-haspopup="true" aria-expanded="false">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/></svg>
-    </button>
-    <button class="fab" id="btn-locate" aria-label="Me localiser">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
-    </button>
-  </div>
-  <div id="layers" class="popover layers" hidden></div>
-
-  <div class="bottom-bar">
-    <button class="chip-btn" id="btn-live" hidden>
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4v6h6M20 20v-6h-6"/><path d="M20 10A8 8 0 0 0 6 5.3L4 10m16 4-2 4.7A8 8 0 0 1 4 14"/></svg>
-      <span>Charger cette zone</span>
-    </button>
-    <button class="chip-btn primary" id="btn-list">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h0M4 12h0M4 18h0"/></svg>
-      <span id="list-label">Liste</span>
-    </button>
-  </div>
-  <div class="map-status" id="map-status" role="status" aria-live="polite"></div>
-
-  <!-- Liste des résultats (feuille) -->
-  <section id="list-sheet" class="sheet" aria-label="Résultats" hidden>
-    <div class="sheet-handle" aria-hidden="true"><span></span></div>
-    <div class="sheet-head">
-      <h2 id="list-title">Résultats</h2>
-      <label class="sort">
-        <span class="sr-only">Trier par</span>
-        <select id="list-sort">
-          <option value="rel">Les plus connus</option>
-          <option value="up-asc">D+ croissant</option>
-          <option value="up-desc">D+ décroissant</option>
-          <option value="km">Plus courts</option>
-          <option value="h">Plus rapides</option>
-          <option value="alt">Plus hauts</option>
-          <option value="t">Plus faciles</option>
-        </select>
-      </label>
-      <button class="icon-btn" data-close aria-label="Fermer la liste"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+  <footer class="site-footer">
+    <div class="ft-inner">
+      <div class="ft-col">
+        <a class="brand" href="#/"><img src="assets/icon.svg" alt="" width="28" height="28"><span>Mountains<b>Road</b></span></a>
+        <p>Randonnées, sommets, voies d’ascension, via ferrata et alpinisme, à partir de données ouvertes.</p>
+      </div>
+      <div class="ft-col">
+        <h2>Explorer</h2>
+        <a href="#/explorer?type=routes">Randonnées</a>
+        <a href="#/explorer?type=peaks">Sommets</a>
+        <a href="#/explorer?type=huts">Refuges</a>
+        <a href="#/explorer?type=ferrata">Via ferrata</a>
+        <a href="#/massifs">Massifs</a>
+        <a href="#/carte">Carte</a>
+      </div>
+      <div class="ft-col">
+        <h2>Comprendre</h2>
+        <a href="#/guide">Difficultés et cotations</a>
+        <a href="#/statistiques">Statistiques</a>
+        <a href="#/donnees">Sources et méthode</a>
+      </div>
+      <div class="ft-col">
+        <h2>Données</h2>
+        <p class="ft-small">© contributeurs OpenStreetMap (ODbL) · Wikidata (CC0) · Wikipedia et Wikimedia Commons (CC BY-SA) · Camptocamp (CC BY-SA) · Terrain Tiles (AWS Open Data) · Open-Meteo (CC BY 4.0)</p>
+        <p class="ft-small" id="ft-date"></p>
+      </div>
     </div>
-    <div class="sheet-body">
-      <div id="list" class="cards"></div>
-      <button id="list-more" class="btn wide" hidden>Afficher plus</button>
-    </div>
-  </section>
-
-  <!-- Fiche (feuille) -->
-  <section id="detail" class="sheet" aria-label="Fiche" hidden>
-    <div class="sheet-handle" aria-hidden="true"><span></span></div>
-    <button class="icon-btn sheet-close" data-close aria-label="Fermer la fiche"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
-    <div class="sheet-body" id="detail-body"></div>
-  </section>
-
-  <!-- Filtres avancés -->
-  <aside id="filters" class="drawer" aria-label="Filtres avancés" hidden>
-    <div class="drawer-head">
-      <h2>Filtres</h2>
-      <button class="link-btn" id="btn-reset">Réinitialiser</button>
-      <button class="icon-btn" data-close aria-label="Fermer les filtres"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
-    </div>
-    <div class="drawer-body" id="filters-body"></div>
-    <div class="drawer-foot"><button class="btn primary wide" id="btn-apply">Voir les résultats</button></div>
-  </aside>
-
-  <!-- Pages (stats, guide, données) -->
-  <section id="page" class="page" hidden>
-    <div class="page-head">
-      <button class="icon-btn" data-close aria-label="Retour à la carte"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
-      <h1 id="page-title"></h1>
-    </div>
-    <div class="page-body" id="page-body"></div>
-  </section>
+    <p class="ft-warn">Ces informations proviennent de données ouvertes et peuvent être incomplètes. Vérifiez toujours les conditions avant de partir en montagne.</p>
+  </footer>
 
   <div id="lightbox" class="lightbox" hidden role="dialog" aria-modal="true" aria-label="Photo">
     <button class="icon-btn lb-close" aria-label="Fermer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>

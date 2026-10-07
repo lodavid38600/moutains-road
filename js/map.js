@@ -1,16 +1,12 @@
-// Carte Leaflet : fonds de carte, marqueurs regroupés, tracés d'itinéraires.
+// Cartes Leaflet : un composant réutilisable (fiches, explorer, page Carte).
 /* global L */
 import { KINDS } from './lib/categories.js';
 import { catColor, esc, meters } from './util.js';
 
-let map, cluster, geomLayer, hoverMarker, selectMarker;
-const markers = new Map(); // id → marker
-let onSelect = () => {};
-
-// Un seul fond par défaut ; les autres restent accessibles dans le menu « couches ».
+// Un fond par défaut ; les autres dans le menu des couches.
 // `preview` : tuile d'aperçu (massif du Mont-Blanc, z10).
 export const BASES = [
-  { id: 'topo', name: 'Topo', url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', maxZoom: 17, subdomains: 'abc',
+  { id: 'topo', name: 'Topo', url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', maxZoom: 17,
     attribution: '© <a href="https://opentopomap.org">OpenTopoMap</a> (CC-BY-SA) · © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' },
   { id: 'osm', name: 'Plan', url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', maxZoom: 19,
     attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' },
@@ -47,150 +43,119 @@ const SHAPES = {
   glacier: (c) => `<svg width="16" height="16" viewBox="0 0 16 16"><path d="M8 1l6 3.5v7L8 15l-6-3.5v-7z" fill="${c}" stroke="#fff" stroke-width="1.6"/></svg>`,
 };
 const iconCache = new Map();
-function iconFor(f) {
+export function iconFor(f, scale = 1) {
   const color = f.c ? catColor(f.c) : KINDS[f.k]?.color || '#777';
-  const key = `${f.k}|${color}`;
+  const key = `${f.k}|${color}|${scale}`;
   if (!iconCache.has(key)) {
-    const svg = (SHAPES[f.k] || SHAPES.viewpoint)(color);
-    const size = f.k === 'route' || f.k === 'ferrata' ? 20 : 18;
+    const size = (f.k === 'route' || f.k === 'ferrata' ? 20 : 18) * scale;
+    const svg = (SHAPES[f.k] || SHAPES.viewpoint)(color).replace('<svg ', `<svg style="transform:scale(${scale})" `);
     iconCache.set(key, L.divIcon({ className: 'mk', html: svg, iconSize: [size, size], iconAnchor: [size / 2, size / 2] }));
   }
   return iconCache.get(key);
 }
-export function resetIcons() { iconCache.clear(); }
+export const resetIcons = () => iconCache.clear();
 
-// ---------------------------------------------------------------- init
-let baseLayer;
-const overlayLayers = new Map();
-
-export function initMap(el, { center = [45.9, 6.9], zoom = 8, onSelect: sel, onMove } = {}) {
-  onSelect = sel || onSelect;
-  map = L.map(el, { zoomControl: false, preferCanvas: true, worldCopyJump: true, tap: true }).setView(center, zoom);
-  if (matchMedia('(min-width: 761px)').matches) L.control.zoom({ position: 'topright' }).addTo(map);
-  L.control.scale({ imperial: false, position: 'bottomright' }).addTo(map);
-  let base = 'topo';
-  try { base = localStorage.getItem('mr-base') || base; } catch { /* stockage indisponible */ }
-  setBase(base);
-
-  cluster = L.markerClusterGroup({
-    chunkedLoading: true, maxClusterRadius: (z) => (z < 9 ? 64 : 44), disableClusteringAtZoom: 14,
-    showCoverageOnHover: false, spiderfyOnMaxZoom: true,
-  });
-  map.addLayer(cluster);
-  geomLayer = L.layerGroup().addTo(map);
-
-  map.on('moveend', () => onMove?.(getBbox(), map.getZoom()));
-  map.on('locationfound', (e) => map.setView(e.latlng, Math.max(map.getZoom(), 13)));
-  return map;
-}
-
-export function setBase(id) {
-  const def = BASES.find((b) => b.id === id) || BASES[0];
-  if (baseLayer) map.removeLayer(baseLayer);
-  baseLayer = L.tileLayer(def.url, { maxZoom: 19, maxNativeZoom: def.maxZoom, subdomains: def.subdomains || 'abc', attribution: def.attribution }).addTo(map);
-  baseLayer.bringToBack();
-  baseLayer._id = def.id;
-  try { localStorage.setItem('mr-base', def.id); } catch { /* */ }
-}
-export const currentBase = () => baseLayer?._id;
-
-export function toggleOverlay(id, on) {
-  const def = OVERLAYS.find((o) => o.id === id);
-  if (!def) return;
-  if (on && !overlayLayers.has(id)) {
-    overlayLayers.set(id, L.tileLayer(def.url, { maxZoom: 19, maxNativeZoom: def.maxZoom, opacity: def.opacity, attribution: def.attribution }).addTo(map));
-  } else if (!on && overlayLayers.has(id)) {
-    map.removeLayer(overlayLayers.get(id));
-    overlayLayers.delete(id);
-  }
-}
-export const overlayOn = (id) => overlayLayers.has(id);
-export const locate = () => map.locate({ enableHighAccuracy: true });
-
-export const getMap = () => map;
-
-export function getBbox(pad = 0) {
-  const b = map.getBounds().pad(pad);
-  return [b.getSouth(), b.getWest(), b.getNorth(), b.getEast()];
-}
-
-function tooltipHtml(f) {
+export function tooltipHtml(f) {
   const bits = [];
   if (f.km) bits.push(`${String(f.km).replace('.', ',')} km`);
   if (f.up) bits.push(`↗ ${meters(f.up)}`);
-  if (!f.km && f.e) bits.push(meters(f.e));
+  if (!f.km && (f.e ?? f.emax)) bits.push(meters(f.e ?? f.emax));
   return `<b>${esc(f.n || KINDS[f.k]?.label)}</b>${bits.length ? '<br>' + bits.join(' · ') : ''}`;
 }
 
-/** Remplace l'ensemble des marqueurs affichés. */
-export function renderMarkers(list) {
-  const keep = new Set(list.map((f) => f.id));
-  const toRemove = [];
-  for (const [id, m] of markers) {
-    if (!keep.has(id)) { toRemove.push(m); markers.delete(id); }
-  }
-  cluster.removeLayers(toRemove);
-  const toAdd = [];
-  for (const f of list) {
-    const prev = markers.get(f.id);
-    if (prev && prev._f === f) continue;
-    if (prev) { cluster.removeLayer(prev); }
-    const m = L.marker([f.la, f.lo], { icon: iconFor(f), title: f.n || '', riseOnHover: true, keyboard: false });
-    m._f = f;
-    m.bindTooltip(() => tooltipHtml(f), { direction: 'top', offset: [0, -8] });
-    m.on('click', () => onSelect(f));
-    markers.set(f.id, m);
-    toAdd.push(m);
-  }
-  cluster.addLayers(toAdd);
+let savedBase = 'topo';
+try { savedBase = localStorage.getItem('mr-base') || 'topo'; } catch { /* stockage indisponible */ }
+
+/**
+ * Crée une carte dans `el`.
+ * @returns {object} API : map, setBase, toggleOverlay, line, marker, fit, hover, clear, destroy…
+ */
+export function createMap(el, { center = [45.9, 6.9], zoom = 9, scrollWheelZoom = true, zoomControl = true } = {}) {
+  const map = L.map(el, { zoomControl: false, preferCanvas: true, worldCopyJump: true, scrollWheelZoom }).setView(center, zoom);
+  if (zoomControl) L.control.zoom({ position: 'topright' }).addTo(map);
+  L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(map);
+  let base;
+  const overlays = new Map();
+  const groups = { lines: L.layerGroup().addTo(map), marks: L.layerGroup().addTo(map) };
+  let hoverMk = null;
+
+  const api = {
+    map,
+    setBase(id) {
+      const def = BASES.find((b) => b.id === id) || BASES[0];
+      if (base) map.removeLayer(base);
+      base = L.tileLayer(def.url, { maxZoom: 19, maxNativeZoom: def.maxZoom, subdomains: 'abc', attribution: def.attribution }).addTo(map);
+      base.bringToBack();
+      api.base = def.id;
+      savedBase = def.id;
+      try { localStorage.setItem('mr-base', def.id); } catch { /* */ }
+    },
+    toggleOverlay(id, on) {
+      const def = OVERLAYS.find((o) => o.id === id);
+      if (on && def && !overlays.has(id)) overlays.set(id, L.tileLayer(def.url, { maxZoom: 19, maxNativeZoom: def.maxZoom, opacity: def.opacity, attribution: def.attribution }).addTo(map));
+      if (!on && overlays.has(id)) { map.removeLayer(overlays.get(id)); overlays.delete(id); }
+    },
+    overlayOn: (id) => overlays.has(id),
+    /** Tracé : lignes [[lat, lon]…], couleur CSS. */
+    line(lines, color, { weight = 4.5, halo = true, group = groups.lines, onClick } = {}) {
+      const g = L.layerGroup().addTo(group);
+      if (halo) L.polyline(lines, { color: '#fff', weight: weight + 3.5, opacity: 0.85, interactive: false }).addTo(g);
+      const pl = L.polyline(lines, { color, weight, opacity: 1 }).addTo(g);
+      if (onClick) pl.on('click', onClick);
+      g.bounds = pl.getBounds();
+      g.poly = pl;
+      return g;
+    },
+    marker(f, { onClick, group = groups.marks, scale = 1, tooltip = true } = {}) {
+      const m = L.marker([f.la, f.lo], { icon: iconFor(f, scale), keyboard: false, riseOnHover: true }).addTo(group);
+      if (tooltip) m.bindTooltip(() => tooltipHtml(f), { direction: 'top', offset: [0, -8] });
+      if (onClick) m.on('click', () => onClick(f));
+      return m;
+    },
+    dot(latlng, color, { label, group = groups.marks, r = 7 } = {}) {
+      const m = L.circleMarker(latlng, { radius: r, color: '#fff', weight: 2.5, fillColor: color, fillOpacity: 1 }).addTo(group);
+      if (label) m.bindTooltip(label, { direction: 'top', offset: [0, -6] });
+      return m;
+    },
+    fit(bounds, padding = 30) { if (bounds?.isValid?.()) map.fitBounds(bounds, { padding: [padding, padding], maxZoom: 15 }); },
+    fitPoints(points, padding = 30) { if (points.length) api.fit(L.latLngBounds(points), padding); },
+    hover(latlng) {
+      if (!latlng) { if (hoverMk) { map.removeLayer(hoverMk); hoverMk = null; } return; }
+      if (!hoverMk) hoverMk = L.marker(latlng, { icon: L.divIcon({ className: '', html: '<div class="hover-dot"></div>', iconSize: [16, 16] }), interactive: false, zIndexOffset: 1000 }).addTo(map);
+      else hoverMk.setLatLng(latlng);
+    },
+    clear() { groups.lines.clearLayers(); groups.marks.clearLayers(); },
+    groups,
+    destroy() { map.remove(); },
+    invalidate() { map.invalidateSize(); },
+  };
+  api.setBase(savedBase);
+  return api;
 }
 
-export function refreshIcons() {
-  resetIcons();
-  for (const m of markers.values()) m.setIcon(iconFor(m._f));
+/** Contrôle « couches » discret (fonds + calques) pour une carte. */
+export function layersControl(api, container) {
+  const btn = document.createElement('button');
+  btn.className = 'map-ctl';
+  btn.setAttribute('aria-label', 'Fonds de carte et calques');
+  btn.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/></svg>';
+  const pop = document.createElement('div');
+  pop.className = 'layers-pop';
+  pop.hidden = true;
+  const render = () => {
+    pop.innerHTML = `<h3>Fond de carte</h3>
+      <div class="base-grid">${BASES.map((b) => `<button class="base-opt" data-base="${b.id}" aria-pressed="${b.id === api.base}"><img src="${esc(previewUrl(b))}" alt="" loading="lazy"><span>${esc(b.name)}</span></button>`).join('')}</div>
+      <h3>Calques</h3>
+      ${OVERLAYS.map((o) => `<label><input type="checkbox" data-ov="${o.id}" ${api.overlayOn(o.id) ? 'checked' : ''}> ${esc(o.name)}</label>`).join('')}`;
+    pop.querySelectorAll('[data-base]').forEach((b) => b.addEventListener('click', () => { api.setBase(b.dataset.base); render(); }));
+    pop.querySelectorAll('[data-ov]').forEach((i) => i.addEventListener('change', () => api.toggleOverlay(i.dataset.ov, i.checked)));
+  };
+  btn.addEventListener('click', (e) => { e.stopPropagation(); render(); pop.hidden = !pop.hidden; });
+  document.addEventListener('pointerdown', (e) => { if (!pop.contains(e.target) && e.target !== btn && !btn.contains(e.target)) pop.hidden = true; });
+  const ctl = L.control({ position: 'topright' });
+  ctl.onAdd = () => { const d = L.DomUtil.create('div', 'leaflet-control'); d.append(btn); L.DomEvent.disableClickPropagation(d); return d; };
+  ctl.addTo(api.map);
+  container.append(pop);
+  L.DomEvent.disableClickPropagation(pop);
+  L.DomEvent.disableScrollPropagation(pop);
 }
-
-/** Affiche le tracé d'un itinéraire. */
-export function showGeometry(f, lines, { fit = true, padding } = {}) {
-  geomLayer.clearLayers();
-  const color = catColor(f.c);
-  L.polyline(lines, { color: '#fff', weight: 8, opacity: 0.85, interactive: false }).addTo(geomLayer);
-  const pl = L.polyline(lines, { color, weight: 4.5, opacity: 1 }).addTo(geomLayer);
-  if (fit && lines.length) fitBounds(pl.getBounds(), padding);
-  // Départ / arrivée.
-  if (lines.length) {
-    const dot = (p, fill) => L.circleMarker(p, { radius: 6, color: '#fff', weight: 2.5, fillColor: fill, fillOpacity: 1, interactive: false }).addTo(geomLayer);
-    dot(lines[0][0], color);
-    if (lines.length === 1) dot(lines[0].at(-1), '#222');
-  }
-}
-
-/** Ajuste la vue en tenant compte des panneaux qui recouvrent la carte. */
-export function fitBounds(bounds, padding = {}) {
-  const { left = 40, bottom = 40, top = 40, right = 40 } = padding;
-  map.fitBounds(bounds, { paddingTopLeft: [left, top], paddingBottomRight: [right, bottom], maxZoom: 15 });
-}
-
-export function clearGeometry() { geomLayer.clearLayers(); }
-
-export function highlight(f) {
-  if (selectMarker) map.removeLayer(selectMarker);
-  selectMarker = null;
-  if (!f) { geomLayer.clearLayers(); return; }
-  selectMarker = L.circleMarker([f.la, f.lo], { radius: 16, color: catColor(f.c), weight: 3, fill: false, interactive: false }).addTo(map);
-}
-
-export function setHoverPoint(latlng) {
-  if (!latlng) { if (hoverMarker) { map.removeLayer(hoverMarker); hoverMarker = null; } return; }
-  if (!hoverMarker) hoverMarker = L.marker(latlng, { icon: L.divIcon({ className: '', html: '<div class="hover-dot"></div>', iconSize: [14, 14] }), interactive: false }).addTo(map);
-  else hoverMarker.setLatLng(latlng);
-}
-
-/** Centre un point en le décalant pour qu'il reste visible à côté du panneau / au-dessus de la feuille. */
-export function flyTo(la, lo, zoom = 13, offset = [0, 0]) {
-  const z = Math.max(zoom, map.getZoom());
-  const p = map.project([la, lo], z).add(L.point(-offset[0] / 2, offset[1] / 2));
-  map.flyTo(map.unproject(p, z), z, { duration: 0.7 });
-}
-export function fitBbox([s, w, n, e]) { map.fitBounds([[s, w], [n, e]]); }
-export function invalidate() { map?.invalidateSize(); }

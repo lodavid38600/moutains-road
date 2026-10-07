@@ -1,15 +1,42 @@
 // Service worker : chargement rapide et consultation hors ligne des zones déjà visitées.
 //  - interface (HTML, CSS, JS, bibliothèques) : servie depuis le cache, mise à jour en arrière-plan ;
 //  - données (data/…) : réseau d'abord, cache en secours (utile sans réseau en montagne).
-const SHELL = 'mr-shell-v1';
+const SHELL = 'mr-shell-v2';
 const DATA = 'mr-data-v1';
 const SHELL_FILES = [
   './', 'index.html', 'css/style.css', 'manifest.webmanifest', 'assets/icon.svg',
   'vendor/leaflet/leaflet.js', 'vendor/leaflet/leaflet.css',
   'vendor/markercluster/leaflet.markercluster.js', 'vendor/markercluster/MarkerCluster.css',
-  'js/app.js', 'js/api.js', 'js/charts.js', 'js/dem-browser.js', 'js/detail.js', 'js/filters.js',
-  'js/lightbox.js', 'js/list.js', 'js/map.js', 'js/pages.js', 'js/sheet.js', 'js/store.js', 'js/util.js',
-  'js/lib/categories.js', 'js/lib/dem.js', 'js/lib/geo.js', 'js/lib/normalize.js', 'js/lib/overpass.js', 'js/lib/polyline.js',
+  'js/api.js',
+  'js/app.js',
+  'js/charts.js',
+  'js/components/cards.js',
+  'js/components/detail-common.js',
+  'js/components/photos.js',
+  'js/components/profile.js',
+  'js/components/weather.js',
+  'js/data.js',
+  'js/dem-browser.js',
+  'js/lib/along.js',
+  'js/lib/ascent.js',
+  'js/lib/categories.js',
+  'js/lib/dem.js',
+  'js/lib/geo.js',
+  'js/lib/normalize.js',
+  'js/lib/overpass.js',
+  'js/lib/polyline.js',
+  'js/lightbox.js',
+  'js/map.js',
+  'js/pages/explore.js',
+  'js/pages/home.js',
+  'js/pages/info.js',
+  'js/pages/map.js',
+  'js/pages/massif.js',
+  'js/pages/peak.js',
+  'js/pages/place.js',
+  'js/pages/route.js',
+  'js/router.js',
+  'js/util.js',
 ];
 
 self.addEventListener('install', (e) => {

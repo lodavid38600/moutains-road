@@ -1,33 +1,36 @@
-// Pages plein écran : statistiques, guide des difficultés, données.
-import { CATEGORIES, KINDS, SAC_BY_T, FERRATA_SCALE, FERRATA_PLAIN } from './lib/categories.js';
-import { store, isRoute } from './store.js';
-import { barChart, histogram } from './charts.js';
-import { $, esc, num, fmtKm, fetchJson } from './util.js';
+// Pages d'information : guide des difficultés, statistiques, sources et méthode.
+import { CATEGORIES, KINDS, SAC_BY_T, FERRATA_SCALE, FERRATA_PLAIN } from '../lib/categories.js';
+import { db, loadMeta, loadStats, isRoute, hrefFor } from '../data.js';
+import { barChart, histogram } from '../charts.js';
+import { esc, num, fmtKm } from '../util.js';
 
-let ctx = {};
-export function initPages(context) {
-  ctx = context;
-  $('#page [data-close]').addEventListener('click', closePage);
+const store = db;
+const page = (title, intro) => `<div class="wrap"><h1 class="page-title">${title}</h1>${intro ? `<p class="page-intro">${intro}</p>` : ''}<div id="info-body"></div></div>`;
+
+export async function guidePage(el) {
+  document.title = 'Comprendre les difficultés · Mountains Road';
+  el.innerHTML = page('Comprendre les difficultés', 'Catégories, cotations, dénivelé, durée : comment lire les fiches.');
+  el.querySelector('#info-body').innerHTML = guideHtml();
 }
 
-export function openPage(name) {
-  const page = $('#page');
-  page.hidden = false;
-  const titles = { stats: 'Statistiques', guide: 'Comprendre les difficultés', data: 'Les données' };
-  $('#page-title').textContent = titles[name] || '';
-  const body = $('#page-body');
-  body.scrollTop = 0;
-  if (name === 'stats') renderStats(body);
-  if (name === 'guide') body.innerHTML = guideHtml();
-  if (name === 'data') body.innerHTML = dataHtml();
+export async function statsPage(el, { alive }) {
+  document.title = 'Statistiques · Mountains Road';
+  el.innerHTML = page('Statistiques', '');
+  await loadMeta();
+  if (!alive()) return;
+  await renderStats(el.querySelector('#info-body'));
 }
-export function closePage() { $('#page').hidden = true; }
 
-// ---------------------------------------------------------------- stats
+export async function dataPage(el) {
+  document.title = 'Sources et méthode · Mountains Road';
+  el.innerHTML = page('Sources et méthode', 'D’où viennent les données, et comment elles sont calculées.');
+  await loadMeta();
+  el.querySelector('#info-body').innerHTML = dataHtml();
+}
+
 async function renderStats(body) {
-  body.innerHTML = '<div class="wrap"><p class="loading">Calcul…</p></div>';
-  let s = null, scope = 'Base complète';
-  if (store.meta) s = await fetchJson('data/stats.json').catch(() => null);
+  body.innerHTML = '<p class="loading">Calcul…</p>';
+  let s = await loadStats(), scope = 'Base complète';
   if (!s) { s = computeStats([...store.features.values()]); scope = 'Données chargées sur la carte'; }
 
   const k = s.byKind || {};
@@ -43,9 +46,9 @@ async function renderStats(body) {
   const sacRows = [1, 2, 3, 4, 5, 6].map((t) => ({ label: `${SAC_BY_T[t].code} · ${['facile', 'montagne', 'raide', 'alpin', 'alpin exigeant', 'alpinisme'][t - 1]}`, value: s.bySac?.[t] || 0, color: `var(--cat-${t <= 2 ? 'rando' : t === 3 ? 'montagne' : t <= 5 ? 'alpine' : 'alpinisme'})` }));
   const altBins = Object.entries(s.peaksByAltitude || {}).map(([b, v]) => [+b, v]).sort((a, b) => a[0] - b[0]);
   const table = (rows, cols) => `<div class="table-scroll"><table class="tbl"><thead><tr>${cols.map(([l, , r]) => `<th class="${r ? 'r' : ''}">${l}</th>`).join('')}</tr></thead><tbody>
-    ${rows.map((f) => `<tr data-id="${esc(f.id)}" data-la="${f.la}" data-lo="${f.lo}">${cols.map(([, fn, r]) => `<td class="${r ? 'r' : ''}">${fn(f)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+    ${rows.map((f) => `<tr data-id="${esc(f.id)}" data-k="${f.k}" data-la="${f.la}" data-lo="${f.lo}">${cols.map(([, fn, r]) => `<td class="${r ? 'r' : ''}">${fn(f)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
 
-  body.innerHTML = `<div class="wrap">
+  body.innerHTML = `<div style="display:grid;gap:18px">
     <p class="muted">${esc(scope)}${store.meta ? ` · collecte du ${new Date(store.meta.generated).toLocaleDateString('fr-FR')}` : ''}</p>
     <div class="kpis">${kpis.map(([v, l]) => `<div class="kpi"><div class="v">${v}</div><div class="l">${l}</div></div>`).join('')}</div>
     <div class="panels">
@@ -65,13 +68,9 @@ async function renderStats(body) {
     </tbody></table></div></div>` : ''}
   </div>`;
   body.querySelectorAll('tr[data-id]').forEach((tr) => tr.addEventListener('click', () => {
-    closePage();
-    ctx.openById?.(tr.dataset.id, +tr.dataset.la, +tr.dataset.lo);
+    location.hash = hrefFor({ id: tr.dataset.id, k: tr.dataset.k, la: tr.dataset.la, lo: tr.dataset.lo });
   }));
-  body.querySelectorAll('tr[data-region]').forEach((tr) => tr.addEventListener('click', () => {
-    closePage();
-    ctx.goRegion?.(s.regions.find((r) => r.id === tr.dataset.region));
-  }));
+  body.querySelectorAll('tr[data-region]').forEach((tr) => tr.addEventListener('click', () => { location.hash = `#/massif/${tr.dataset.region}`; }));
 }
 
 /** Statistiques calculées dans le navigateur (sans collecte). */
@@ -94,9 +93,8 @@ function computeStats(all) {
   };
 }
 
-// ---------------------------------------------------------------- guide
 function guideHtml() {
-  return `<div class="wrap prose">
+  return `<div class="prose">
   <p>Chaque itinéraire et chaque sommet est classé dans une <b>catégorie d’activité</b>, d’après la difficulté des sentiers saisie par les contributeurs d’OpenStreetMap. Les couleurs sont les mêmes partout sur le site.</p>
   <table class="tbl diff-table"><tbody>
     ${Object.entries(CATEGORIES).map(([c, d]) => `<tr><td><span class="badge" style="--c:var(--cat-${c})"><span class="dot"></span>${esc(d.label)}</span></td><td>${esc(d.desc)}</td></tr>`).join('')}
@@ -120,6 +118,27 @@ function guideHtml() {
   <h2>La durée estimée</h2>
   <p>Calculée avec la méthode utilisée par les clubs alpins (norme DIN 33466) : <b>4 km/h</b> sur le plat, <b>300 m/h</b> de montée et <b>500 m/h</b> de descente, en combinant distance et dénivelé. Les pauses ne sont pas comptées.</p>
 
+  <h2>Les voies d’ascension d’un sommet</h2>
+  <p>Chaque fiche sommet rassemble <b>toutes les manières connues d’y monter</b> :</p>
+  <ul>
+    <li><b>Par les sentiers</b> : le site calcule les meilleurs chemins sur le réseau de sentiers OpenStreetMap depuis chaque parking, refuge ou route proche, et ne garde que des voies réellement différentes (départs et tracés distincts).</li>
+    <li><b>Les itinéraires balisés</b> (GR, PR…) qui passent par le sommet, avec la portion jusqu’au sommet.</li>
+    <li><b>Les voies de Camptocamp</b> : alpinisme, escalade, randonnée, ski… avec la cotation et le dénivelé donnés par les auteurs des topos.</li>
+  </ul>
+  <p>Les profils de toutes ces voies sont superposés sur un même graphique pour les comparer d’un coup d’œil.</p>
+
+  <h2>Les cotations d’alpinisme</h2>
+  <table class="tbl diff-table"><tbody>
+    <tr><td>F</td><td><b>Facile</b><br><span class="muted">Passages simples, peu d’engagement ; souvent glacier facile ou arête large.</span></td></tr>
+    <tr><td>PD</td><td><b>Peu difficile</b><br><span class="muted">Pentes de neige modérées, rocher facile, technique d’encordement nécessaire.</span></td></tr>
+    <tr><td>AD</td><td><b>Assez difficile</b><br><span class="muted">Pentes raides, passages d’escalade (III-IV), bonne expérience requise.</span></td></tr>
+    <tr><td>D</td><td><b>Difficile</b><br><span class="muted">Escalade soutenue (IV-V), pentes de neige/glace raides, longues courses.</span></td></tr>
+    <tr><td>TD · ED</td><td><b>Très difficile · Extrêmement difficile</b><br><span class="muted">Réservé aux alpinistes confirmés.</span></td></tr>
+  </tbody></table>
+
+  <h2>La pente sur les profils</h2>
+  <p>Les profils d’altitude sont colorés selon la pente du terrain, mesurée sur environ 150 m : du plus clair (moins de 5 %) au plus foncé (plus de 35 %). Au-delà de 25 à 30 %, la montée devient très raide et la descente délicate.</p>
+
   <h2>L’accès aux sommets</h2>
   <p>Pour chaque sommet, on regarde les chemins cartographiés à moins de 150 m. S’il en existe un, le sommet est « accessible par un sentier » et prend la difficulté du chemin le plus facile. Sinon, c’est a priori un <b>terrain d’alpinisme</b> : pas de sentier, et souvent rocher ou glacier.</p>
 
@@ -129,10 +148,9 @@ function guideHtml() {
   </div>`;
 }
 
-// ---------------------------------------------------------------- données
 function dataHtml() {
   const m = store.meta;
-  return `<div class="wrap prose">
+  return `<div class="prose">
   <h2>D’où viennent les données ?</h2>
   <ul>
     <li><b><a href="https://www.openstreetmap.org" target="_blank" rel="noopener">OpenStreetMap</a></b> (ODbL) : itinéraires de randonnée, sentiers et leur difficulté, sommets, cols, refuges, abris, via ferrata, sites d’escalade.</li>
