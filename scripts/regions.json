@@ -1,0 +1,22 @@
+{
+  "_doc": "Massifs collectés depuis OpenStreetMap. bbox = [sud, ouest, nord, est]. Ajoutez/retirez librement des zones ; 'step' = taille des cellules de requête en degrés (réduire pour les zones très denses).",
+  "regions": [
+    { "id": "alpes-nord",      "name": "Alpes du Nord (Savoie, Isère, Valais W, Vallée d'Aoste)", "bbox": [44.8, 5.2, 46.5, 7.9],  "step": 0.5 },
+    { "id": "alpes-sud",       "name": "Alpes du Sud (Hautes-Alpes, Ubaye, Mercantour, Préalpes)", "bbox": [43.6, 5.0, 44.8, 7.8],  "step": 0.5 },
+    { "id": "alpes-centrales", "name": "Alpes centrales (Suisse, Lombardie, Grisons)",            "bbox": [45.5, 7.9, 47.8, 10.5], "step": 0.5 },
+    { "id": "alpes-orientales","name": "Alpes orientales (Tyrol, Dolomites, Slovénie)",           "bbox": [45.6, 10.5, 47.9, 16.0], "step": 0.5 },
+    { "id": "pyrenees",        "name": "Pyrénées",                                                 "bbox": [42.0, -2.0, 43.4, 3.3], "step": 0.5 },
+    { "id": "massif-central",  "name": "Massif central",                                           "bbox": [44.0, 2.0, 46.2, 4.6],  "step": 1 },
+    { "id": "jura",            "name": "Jura",                                                     "bbox": [46.5, 5.4, 47.6, 7.9],  "step": 1 },
+    { "id": "vosges",          "name": "Vosges",                                                   "bbox": [47.6, 6.4, 48.8, 7.8],  "step": 1 },
+    { "id": "corse",           "name": "Corse",                                                    "bbox": [41.3, 8.5, 43.1, 9.6],  "step": 1 },
+    { "id": "cantabrique",     "name": "Picos de Europa & Cordillère cantabrique",                 "bbox": [42.7, -7.0, 43.4, -3.5], "step": 1 },
+    { "id": "sierra-nevada",   "name": "Sierra Nevada (Espagne)",                                  "bbox": [36.8, -3.8, 37.3, -2.6], "step": 1 },
+    { "id": "apennins",        "name": "Apennins centraux (Abruzzes, Gran Sasso)",                 "bbox": [41.6, 12.8, 43.0, 14.6], "step": 1 },
+    { "id": "tatras",          "name": "Tatras",                                                   "bbox": [48.9, 19.3, 49.5, 20.6], "step": 1 },
+    { "id": "ecosse",          "name": "Highlands écossais",                                       "bbox": [56.3, -6.4, 58.0, -3.0], "step": 1 },
+    { "id": "jotunheimen",     "name": "Norvège (Jotunheimen, Romsdal)",                           "bbox": [61.2, 6.5, 62.8, 9.5],  "step": 1 },
+    { "id": "atlas",           "name": "Haut Atlas (Toubkal)",                                     "bbox": [30.8, -8.3, 31.4, -7.3], "step": 1 },
+    { "id": "khumbu",          "name": "Himalaya – Khumbu / Everest",                              "bbox": [27.6, 86.4, 28.2, 87.2], "step": 1 }
+  ]
+}

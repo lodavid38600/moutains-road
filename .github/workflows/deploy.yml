@@ -1,0 +1,95 @@
+# Collecte des données (OpenStreetMap, Wikidata, modèle de terrain) puis
+# publication du site sur GitHub Pages.
+#  - push sur la branche par défaut : publication avec les dernières données en cache ;
+#  - chaque lundi : mise à jour des données (les zones de plus de 30 jours sont recollectées) ;
+#  - à la demande (onglet Actions → « Run workflow ») : collecte ciblée.
+name: Collecte et publication
+
+on:
+  push:
+  schedule:
+    - cron: '17 3 * * 1'
+  workflow_dispatch:
+    inputs:
+      regions:
+        description: "Massifs OSM à collecter (ids de scripts/regions.json séparés par des virgules, ou 'all')"
+        default: all
+      countries:
+        description: "Pays Wikidata (codes ISO séparés par des virgules, 'all', ou 'none' pour ne pas collecter)"
+        default: all
+      max_age:
+        description: "Âge maximal du cache en jours (0 = tout recollecter)"
+        default: '30'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.event_name != 'push' || github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Restaurer le cache de collecte
+        uses: actions/cache/restore@v4
+        with:
+          path: .cache
+          key: harvest-v1-${{ github.run_id }}
+          restore-keys: harvest-v1-
+
+      - name: Tests
+        run: npm test
+
+      - name: Collecte Wikidata (sommets du monde entier)
+        if: github.event_name != 'push' && inputs.countries != 'none'
+        run: node scripts/harvest-wikidata.mjs --max-age=${{ inputs.max_age || 30 }} ${{ inputs.countries && inputs.countries != 'all' && format('--countries={0}', inputs.countries) || '' }}
+
+      - name: Collecte OpenStreetMap + dénivelés
+        if: github.event_name != 'push' && inputs.regions != 'none'
+        run: node scripts/harvest-osm.mjs --max-age=${{ inputs.max_age || 30 }} --regions=${{ inputs.regions || 'all' }}
+
+      - name: Sauvegarder le cache (même en cas d'échec partiel)
+        if: always() && github.event_name != 'push'
+        uses: actions/cache/save@v4
+        with:
+          path: .cache
+          key: harvest-v1-${{ github.run_id }}
+
+      - name: Assemblage des données
+        run: |
+          if [ -d .cache/raw ]; then node scripts/build-data.mjs; else echo "Pas encore de collecte : le site fonctionnera en mode direct."; fi
+
+      - name: Préparation du site
+        run: |
+          mkdir -p _site
+          cp -r index.html manifest.webmanifest css js vendor assets _site/
+          if [ -f data/meta.json ]; then cp -r data _site/; fi
+          touch _site/.nojekyll
+          du -sh _site
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

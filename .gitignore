@@ -1,0 +1,6 @@
+node_modules/
+.cache/
+data/
+!data/.gitkeep
+_site/
+.DS_Store
