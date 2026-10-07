@@ -45,6 +45,20 @@ test('chainWays raccorde des chemins dans le désordre', () => {
   const chains = chainWays([c, a, b]);
   assert.equal(chains.length, 1);
   assert.equal(chains[0].pts.length, 4);
+  // Raccord par l'arrière : le premier tronçon n'est pas au début.
+  const back = chainWays([[[0, 1], [0, 2]], [[0, 0], [0, 1]]]);
+  assert.deepEqual(back[0].pts, [[0, 0], [0, 1], [0, 2]]);
+});
+
+test('chainWays reste rapide sur un très long itinéraire (GR)', () => {
+  const ways = [];
+  for (let i = 0; i < 5000; i++) ways.push([[45, 6 + i * 0.001], [45, 6 + (i + 1) * 0.001]]);
+  ways.sort(() => 0.5 - Math.random());
+  const t0 = Date.now();
+  const chains = chainWays(ways);
+  assert.ok(Date.now() - t0 < 1000, `${Date.now() - t0} ms`);
+  assert.equal(chains.length, 1);
+  assert.equal(chains[0].pts.length, 5001);
 });
 
 test('dénivelé : une montée régulière de 1000 m', async () => {

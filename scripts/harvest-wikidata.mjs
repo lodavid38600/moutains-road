@@ -33,6 +33,7 @@ async function sparql(query, attempt = 0) {
       'Content-Type': 'application/x-www-form-urlencoded',
     },
     body: 'query=' + encodeURIComponent(query),
+    signal: AbortSignal.timeout(120000),
   });
   if (res.status === 429 || res.status === 503 || res.status === 502) {
     if (attempt >= 6) throw new Error(`HTTP ${res.status}`);
@@ -145,8 +146,11 @@ if (opts.countries) {
 }
 log(`${list.length} pays à interroger`);
 
+// Heure limite (secondes epoch) : la suite sera collectée à la prochaine exécution.
+const DEADLINE = Number(process.env.DEADLINE_WIKIDATA || process.env.DEADLINE || 0) * 1000;
 let total = 0, failed = [];
 for (const [cc, q] of list) {
+  if (DEADLINE && Date.now() > DEADLINE) { log('Heure limite atteinte : arrêt, reprise à la prochaine exécution.'); break; }
   const path = join(RAW_DIR, 'wikidata', `${cc}.json`);
   if (await fresh(path)) continue;
   try {

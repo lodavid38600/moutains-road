@@ -57,7 +57,7 @@ async function loadTerrarium(z, x, y) {
   try { buf = await readFile(path); } catch {
     for (let attempt = 0; attempt < 4 && !buf; attempt++) {
       try {
-        const res = await fetch(terrariumUrl(z, x, y), { headers: { 'User-Agent': USER_AGENT } });
+        const res = await fetch(terrariumUrl(z, x, y), { headers: { 'User-Agent': USER_AGENT }, signal: AbortSignal.timeout(30000) });
         if (res.status === 404 || res.status === 403) return null; // océan / hors couverture
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         buf = Buffer.from(await res.arrayBuffer());

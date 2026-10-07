@@ -38,6 +38,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # La collecte complète prend plus que les 6 h d'un job : chaque exécution avance
+      # jusqu'à son heure limite, publie, et la suivante reprend grâce au cache.
+      - name: Heures limites
+        run: |
+          echo "DEADLINE_WIKIDATA=$(( $(date +%s) + 90*60 ))" >> $GITHUB_ENV
+          echo "DEADLINE=$(( $(date +%s) + 290*60 ))" >> $GITHUB_ENV
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22

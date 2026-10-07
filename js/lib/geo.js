@@ -46,29 +46,40 @@ export function quarter([s, w, n, e]) {
  */
 export function chainWays(ways) {
   const key = (p) => `${p[0].toFixed(6)},${p[1].toFixed(6)}`;
-  const pool = ways.filter((w) => w.length > 1).map((w) => w.slice());
+  const pool = ways.filter((w) => w.length > 1);
+  const used = new Uint8Array(pool.length);
+  // Index des extrémités → tronçons (raccordement en temps linéaire).
+  const ends = new Map();
+  const addEnd = (k, i) => { const l = ends.get(k); if (l) l.push(i); else ends.set(k, [i]); };
+  pool.forEach((w, i) => { addEnd(key(w[0]), i); addEnd(key(w[w.length - 1]), i); });
+  const take = (k) => {
+    const l = ends.get(k);
+    if (!l) return -1;
+    for (const i of l) if (!used[i]) return i;
+    return -1;
+  };
   const chains = [];
-  while (pool.length) {
-    let chain = pool.pop();
-    let grown = true;
-    while (grown) {
-      grown = false;
-      for (let i = 0; i < pool.length; i++) {
-        const w = pool[i];
-        const hs = key(chain[0]), he = key(chain[chain.length - 1]);
-        const ws = key(w[0]), we = key(w[w.length - 1]);
-        if (he === ws) chain = chain.concat(w.slice(1));
-        else if (he === we) chain = chain.concat(w.slice().reverse().slice(1));
-        else if (hs === we) chain = w.concat(chain.slice(1));
-        else if (hs === ws) chain = w.slice().reverse().concat(chain.slice(1));
-        else continue;
-        pool.splice(i, 1);
-        grown = true;
-        break;
-      }
+  for (let s = 0; s < pool.length; s++) {
+    if (used[s]) continue;
+    used[s] = 1;
+    let head = [], tail = pool[s].slice();
+    // Prolonge vers l'avant.
+    for (let k = key(tail[tail.length - 1]), i; (i = take(k)) >= 0; k = key(tail[tail.length - 1])) {
+      used[i] = 1;
+      const w = pool[i];
+      tail = tail.concat((key(w[0]) === k ? w : w.slice().reverse()).slice(1));
     }
-    chains.push(chain);
+    // Puis vers l'arrière (tronçons accumulés en tête, dans l'ordre inverse).
+    for (let k = key(tail[0]), i; (i = take(k)) >= 0;) {
+      used[i] = 1;
+      const w = pool[i];
+      const seg = key(w[w.length - 1]) === k ? w.slice(0, -1) : w.slice().reverse().slice(0, -1);
+      head.push(seg);
+      k = key(seg[0]);
+    }
+    const pts = head.reverse().flat().concat(tail);
+    chains.push(pts);
   }
-  const len = (c) => c.reduce((s, p, i) => (i ? s + distKm(c[i - 1][0], c[i - 1][1], p[0], p[1]) : 0), 0);
+  const len = (c) => { let d = 0; for (let i = 1; i < c.length; i++) d += distKm(c[i - 1][0], c[i - 1][1], c[i][0], c[i][1]); return d; };
   return chains.map((c) => ({ pts: c, km: len(c) })).sort((a, b) => b.km - a.km);
 }

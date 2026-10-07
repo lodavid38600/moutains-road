@@ -22,7 +22,11 @@ import { stat } from 'node:fs/promises';
 
 const opts = args();
 const MAX_AGE_DAYS = Number(opts['max-age'] ?? 30);
-const CONCURRENCY = Number(opts.concurrency ?? 2);
+const CONCURRENCY = Number(opts.concurrency ?? 3);
+// Heure limite (secondes epoch, variable DEADLINE) : au-delà, on ne lance plus de nouvelle requête
+// et on s'arrête proprement ; la prochaine exécution reprendra grâce au cache.
+const DEADLINE = Number(process.env.DEADLINE || 0) * 1000;
+const pastDeadline = () => DEADLINE && Date.now() > DEADLINE;
 const MAX_DEPTH = 3;
 const NO_DEM = !!opts['no-dem'];
 const dem = NO_DEM ? null : createDem({ maxTiles: 600 });
@@ -45,10 +49,12 @@ async function fresh(path) {
  * Interroge Overpass ; si la zone est trop lourde, la découpe en 4.
  * Renvoie { features, routeWays }.
  */
-async function fetchCell(kind, bbox, depth = 0) {
+async function fetchCell(kind, bbox, depth = 0, start = 0) {
+  if (pastDeadline()) throw new Error('heure limite atteinte');
   try {
     const json = await runOverpass(QUERIES[kind](bbox), {
       userAgent: USER_AGENT,
+      start,
       retries: depth === MAX_DEPTH ? 4 : 2,
       log: (m) => log(`   ⚠ ${kind} ${bbox.join(',')} : ${m}`),
     });
@@ -58,7 +64,7 @@ async function fetchCell(kind, bbox, depth = 0) {
     log(`   ↳ découpage de ${kind} ${bbox.join(',')} (${e.message.slice(0, 120)})`);
     const features = new Map(), routeWays = new Map();
     for (const q of quarter(bbox)) {
-      const r = await fetchCell(kind, q, depth + 1);
+      const r = await fetchCell(kind, q, depth + 1, start);
       for (const f of r.features) features.set(f.id, f);
       for (const [k, v] of r.routeWays) routeWays.set(k, v);
     }
@@ -68,9 +74,12 @@ async function fetchCell(kind, bbox, depth = 0) {
 
 /** D+/D−, altitudes et tracé de chaque itinéraire (une seule fois par relation). */
 const metricsDone = new Map(); // id → { geom, profile, metrics } calculés pendant cette exécution
-async function computeRoutes(features, routeWays) {
+async function computeRoutes(features, routeWays, label) {
   const geom = {};
+  let i = 0;
+  const t0 = Date.now();
   for (const f of features) {
+    if (++i % 100 === 0) log(`   … ${label} : dénivelés ${i}/${features.length} (${((Date.now() - t0) / 1000).toFixed(0)} s)`);
     const ways = routeWays.get(f.id);
     if (!ways) continue;
     let m = metricsDone.get(f.id);
@@ -98,13 +107,16 @@ const failures = [];
 
 async function worker(n) {
   while (jobs.length) {
+    if (pastDeadline()) { log(`[w${n}] heure limite atteinte : arrêt, ${jobs.length} requêtes reportées à la prochaine exécution`); return; }
     const { region, cell, kind } = jobs.shift();
     const path = join(RAW_DIR, 'osm', kind, `${cell.join('_')}.json`);
     if (await fresh(path)) { skipped++; continue; }
     const t0 = Date.now();
+    log(`→ [w${n}] ${region.id} ${kind} ${cell.join(',')}`);
     try {
-      const { features, routeWays } = await fetchCell(kind, cell);
-      const geom = kind === 'routes' ? await computeRoutes(features, routeWays) : undefined;
+      const { features, routeWays } = await fetchCell(kind, cell, 0, n - 1);
+      log(`   ${kind} ${cell.join(',')} : réponse Overpass en ${((Date.now() - t0) / 1000).toFixed(0)} s`);
+      const geom = kind === 'routes' ? await computeRoutes(features, routeWays, `${region.id} ${cell.join(',')}`) : undefined;
       await writeJson(path, { region: region.id, bbox: cell, kind, date: new Date().toISOString(), features, geom });
       done++;
       log(`✓ [w${n}] ${region.id} ${kind} ${cell.join(',')} : ${features.length} objets (${((Date.now() - t0) / 1000).toFixed(0)} s) — reste ${jobs.length}`);
@@ -118,7 +130,7 @@ async function worker(n) {
 }
 
 await Promise.all(Array.from({ length: CONCURRENCY }, (_, i) => worker(i + 1)));
-log(`Terminé : ${done} requêtes OK, ${skipped} déjà en cache, ${failed} échecs.`);
+log(`Terminé : ${done} requêtes OK, ${skipped} déjà en cache, ${failed} échecs${jobs.length ? `, ${jobs.length} reportées` : ''}.`);
 if (failures.length) {
   console.log('Échecs (relancez la commande pour réessayer) :\n  ' + failures.join('\n  '));
   if (failed > (done + skipped) / 2) process.exitCode = 1;

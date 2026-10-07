@@ -15,8 +15,8 @@ const bb = (b) => b.map((n) => +n.toFixed(5)).join(',');
  * puis la géométrie et les tags de tous les chemins qui les composent :
  * longueur, difficulté SAC et dénivelé sont calculés ensuite côté client.
  */
-export function routesQuery(b, timeout = 900) {
-  return `[out:json][timeout:${timeout}][maxsize:1073741824];
+export function routesQuery(b, timeout = 300) {
+  return `[out:json][timeout:${timeout}][maxsize:536870912];
 rel[type=route][route~"^(hiking|foot|walking|mountain_hiking|via_ferrata)$"](${bb(b)})->.routes;
 .routes out center;
 way(r.routes)->.w;
@@ -28,9 +28,9 @@ way(r.routes)->.w;
  * et les chemins à moins de 150 m des sommets nommés (pour savoir s'ils sont
  * accessibles en randonnée et à quelle difficulté).
  */
-export function poisQuery(b, timeout = 900) {
+export function poisQuery(b, timeout = 300) {
   const B = bb(b);
-  return `[out:json][timeout:${timeout}][maxsize:1073741824];
+  return `[out:json][timeout:${timeout}][maxsize:536870912];
 (
   node[natural~"^(peak|volcano|saddle)$"](${B});
   node[mountain_pass=yes](${B});
@@ -70,14 +70,19 @@ out tags geom;`;
  * Exécute une requête Overpass avec bascule entre serveurs et nouvelles
  * tentatives. `fetchImpl` permet d'injecter un fetch (Node / navigateur).
  */
-export async function runOverpass(query, { endpoints = OVERPASS_ENDPOINTS, retries = 3, signal, userAgent, log = () => {} } = {}) {
+export async function runOverpass(query, { endpoints = OVERPASS_ENDPOINTS, start = 0, retries = 3, signal, userAgent, log = () => {}, timeoutMs = 8 * 60e3 } = {}) {
+  // Rotation : chaque appelant peut commencer par un serveur différent.
+  const n = endpoints.length;
+  endpoints = endpoints.map((_, i) => endpoints[(i + start) % n]);
   let lastErr;
   for (let attempt = 0; attempt < retries; attempt++) {
     for (const url of endpoints) {
       try {
         const headers = { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', Accept: 'application/json' };
         if (userAgent) headers['User-Agent'] = userAgent;
-        const res = await fetch(url, { method: 'POST', body: 'data=' + encodeURIComponent(query), headers, signal });
+        // Délai maximal par tentative : une connexion bloquée ne doit pas tout figer.
+        const sig = signal && AbortSignal.any ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]) : signal || AbortSignal.timeout(timeoutMs);
+        const res = await fetch(url, { method: 'POST', body: 'data=' + encodeURIComponent(query), headers, signal: sig });
         if (res.status === 429 || res.status === 504 || res.status === 503) {
           lastErr = new Error(`${url} → HTTP ${res.status}`);
           log(String(lastErr.message));
