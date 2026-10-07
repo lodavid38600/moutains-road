@@ -95,7 +95,7 @@ export function gainLoss(eles, { window = 5, threshold = 3 } = {}) {
 
 /**
  * Calcule les métriques d'un itinéraire à partir de ses chemins :
- * longueur, D+/D−, altitudes min/max, profil (≤ 200 points) et tracé simplifié.
+ * longueur, D+/D−, altitudes min/max, profil (≤ 400 points) et tracé simplifié.
  * Le tracé principal est la suite des tronçons raccordés ; les variantes
  * courtes (< 15 % du plus long tronçon) sont ignorées pour le dénivelé.
  */
@@ -122,9 +122,9 @@ export async function routeMetrics(ways, dem, { stepKm = 0.025 } = {}) {
     }
     offset += c.km;
   }
-  // Profil réduit à ~200 points (max local conservé par intervalle).
-  if (profile.length > 200) {
-    const n = Math.ceil(profile.length / 200);
+  // Profil réduit à ~400 points (extrêmes locaux conservés par intervalle).
+  if (profile.length > 400) {
+    const n = Math.ceil(profile.length / 400);
     const red = [];
     for (let i = 0; i < profile.length; i += n) {
       const slice = profile.slice(i, i + n);

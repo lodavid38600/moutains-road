@@ -6,6 +6,8 @@
 //   data/tiles/<lat>_<lon>.json   tous les objets, par tuile de 1°
 //   data/geom/<lat>_<lon>.json    tracés + profils d'altitude des itinéraires
 //   data/search/<lettre>.json     index de recherche par initiale de mot
+//   data/catalog/<massif>.json    catalogue allégé d'un massif (page Explorer)
+//   data/catalog/monde.json       sommets remarquables hors massifs collectés
 
 import { readdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -13,6 +15,8 @@ import { RAW_DIR, DATA_DIR, ROOT, readJson, writeJson, log } from './lib/util.mj
 import { mergeWikidata, classify } from '../js/lib/normalize.js';
 import { tileKey, distKm } from '../js/lib/geo.js';
 import { estimateHours } from '../js/lib/categories.js';
+import { decode } from '../js/lib/polyline.js';
+import { mainLines, placesAlong, gridIndex, bboxOf } from '../js/lib/along.js';
 
 async function listJson(dir) {
   try { return (await readdir(dir)).filter((f) => f.endsWith('.json')).map((f) => join(dir, f)); } catch { return []; }
@@ -121,10 +125,39 @@ for (const f of all) {
 }
 log(`Total : ${all.length} objets`);
 
+// ---- Lieux traversés par les itinéraires ------------------------------------
+// Pour chaque itinéraire : sommets, cols et refuges à moins de 150 m du tracé, avec leur
+// position (km) sur le profil. Pour chaque sommet : les itinéraires qui y passent.
+{
+  const byId = new Map(all.map((f) => [f.id, f]));
+  const places = all.filter((f) => f.n && ['peak', 'volcano', 'col', 'hut', 'shelter'].includes(f.k));
+  const near = gridIndex(places, 0.05);
+  let links = 0;
+  for (const f of all) {
+    const g = f.gm && geoms.get(f.id);
+    if (!g) continue;
+    const lines = g.g.map((x) => decode(x));
+    const [s, w, n, e] = bboxOf(lines);
+    const main = mainLines(lines);
+    const wp = placesAlong(main, near([s - 0.01, w - 0.01, n + 0.01, e + 0.01]), 0.15);
+    g.wp = wp.map((x) => [x.id, x.km]);
+    for (const { id } of wp) {
+      const p = byId.get(id);
+      if (!p || (p.k !== 'peak' && p.k !== 'volcano')) continue;
+      (p.rts ||= []).push(f.id);
+      links++;
+    }
+    f.np = wp.filter((x) => ['peak', 'volcano'].includes(byId.get(x.id)?.k)).length;
+  }
+  for (const p of places) if (p.rts) p.nr = p.rts.length;
+  log(`${links} passages d'itinéraires par des sommets`);
+}
+
 // ---- Écriture --------------------------------------------------------------
 await rm(join(DATA_DIR, 'tiles'), { recursive: true, force: true });
 await rm(join(DATA_DIR, 'search'), { recursive: true, force: true });
 await rm(join(DATA_DIR, 'geom'), { recursive: true, force: true });
+await rm(join(DATA_DIR, 'catalog'), { recursive: true, force: true });
 
 const tiles = new Map();
 for (const f of all) {
@@ -150,6 +183,28 @@ for (const f of all) {
 }
 for (const [k, obj] of geomTiles) await writeJson(join(DATA_DIR, 'geom', `${k}.json`), obj);
 log(`${geoms.size} tracés (${geomTiles.size} fichiers)`);
+
+// Catalogues par massif (page Explorer) : champs utiles aux listes et aux filtres.
+const CAT_KEYS = ['id', 'k', 'n', 'la', 'lo', 'e', 'emax', 'emin', 'c', 't', 'vf', 'km', 'up', 'dn', 'h', 'net', 'ref', 'loop', 'img', 'sl', 'pr', 'rg', 'cc', 'r', 'nr', 'np', 'gm'];
+const catEntry = (f) => {
+  const o = {};
+  for (const k of CAT_KEYS) if (f[k] != null) o[k] = f[k];
+  if (f.acc) o.acc = { t: f.acc.t, nw: f.acc.nw, vf: f.acc.vf };
+  const tg = f.tg || {};
+  if (tg.beds || tg.capacity) o.beds = tg.beds || tg.capacity;
+  return o;
+};
+const inCatalog = (f) => f.n && ['route', 'ferrata', 'peak', 'volcano', 'col', 'hut', 'shelter', 'climbing'].includes(f.k);
+for (const r of regions) {
+  const list = all.filter((f) => f.r === r.id && inCatalog(f)).map(catEntry);
+  if (list.length) await writeJson(join(DATA_DIR, 'catalog', `${r.id}.json`), list);
+}
+{
+  const world = all.filter((f) => !f.r && (f.k === 'peak' || f.k === 'volcano') && f.n && (f.sl >= 5 || f.e >= 4000 || f.pr >= 1500))
+    .sort((a, b) => (b.sl || 0) - (a.sl || 0)).slice(0, 8000).map(catEntry);
+  await writeJson(join(DATA_DIR, 'catalog', 'monde.json'), world);
+  log(`Catalogue monde : ${world.length} sommets`);
+}
 
 // Vue d'ensemble : sommets remarquables + grands itinéraires.
 const slim = ({ tg, ...rest }) => rest;
@@ -183,7 +238,8 @@ for (const [i, list] of search) {
 const count = (arr, fn) => arr.reduce((m, f) => { const k = fn(f); if (k != null) m[k] = (m[k] || 0) + 1; return m; }, {});
 const peaks = all.filter((f) => (f.k === 'peak' || f.k === 'volcano') && f.e);
 const routes = all.filter((f) => f.k === 'route' || f.k === 'ferrata');
-const brief = (f) => ({ id: f.id, n: f.n, k: f.k, la: f.la, lo: f.lo, e: f.e, emax: f.emax, c: f.c, km: f.km, up: f.up, h: f.h, t: f.t, cc: f.cc, r: f.r, rg: f.rg, net: f.net, ref: f.ref });
+const netRank = (f) => ({ iwn: 4, nwn: 3, rwn: 2, lwn: 1 }[f.net] || 0);
+const brief = (f) => ({ id: f.id, n: f.n, k: f.k, la: f.la, lo: f.lo, e: f.e, emax: f.emax, c: f.c, km: f.km, up: f.up, h: f.h, t: f.t, cc: f.cc, r: f.r, rg: f.rg, net: f.net, ref: f.ref, np: f.np, nr: f.nr, loop: f.loop, dn: f.dn });
 const altBands = {};
 for (const p of peaks) {
   const b = Math.min(8500, Math.floor(p.e / 500) * 500);
@@ -205,6 +261,11 @@ const stats = {
   longest: routes.filter((r) => r.km && r.n).sort((a, b) => b.km - a.km).slice(0, 100).map(brief),
   biggestGain: routes.filter((r) => r.up && r.n).sort((a, b) => b.up - a.up).slice(0, 100).map(brief),
   byGain: count(routes.filter((r) => r.up != null), (r) => (r.up < 500 ? '< 500 m' : r.up < 800 ? '500–800 m' : r.up < 1200 ? '800–1 200 m' : r.up < 2000 ? '1 200–2 000 m' : '> 2 000 m')),
+  // Sélections pour l'accueil.
+  photoPeaks: peaks.filter((p) => p.img && p.n).sort((a, b) => (b.sl || 0) - (a.sl || 0) || b.e - a.e).slice(0, 24).map((f) => ({ ...brief(f), img: f.img, sl: f.sl, pr: f.pr })),
+  shortRoutes: routes.filter((r) => r.n && r.up != null && r.up < 800 && r.km >= 3 && r.km <= 20).sort((a, b) => netRank(b) - netRank(a) || (b.np || 0) - (a.np || 0) || b.up - a.up).slice(0, 24).map(brief),
+  byCategoryTop: Object.fromEntries(['rando', 'montagne', 'alpine', 'alpinisme', 'ferrata'].map((c) => [c,
+    routes.filter((r) => r.c === c && r.n && r.km).sort((a, b) => netRank(b) - netRank(a) || (b.np || 0) - (a.np || 0) || (b.up || 0) - (a.up || 0)).slice(0, 12).map(brief)])),
   hardest: routes.filter((r) => r.t >= 4 && r.n).sort((a, b) => (b.t - a.t) || ((b.km || 0) - (a.km || 0))).slice(0, 100).map(brief),
 };
 await writeJson(join(DATA_DIR, 'stats.json'), stats);
@@ -217,7 +278,7 @@ await writeJson(join(DATA_DIR, 'meta.json'), {
   total: all.length,
   byKind: stats.byKind,
   byCategory: stats.byCategory,
-  regions: stats.regions.map(({ id, name, bbox, total }) => ({ id, name, bbox, total })),
+  regions: stats.regions.map(({ id, name, bbox, total, byKind }) => ({ id, name, bbox, total, byKind })),
   tiles: tileCounts,
   searchKeys: [...search.keys()].sort(),
 }, true);

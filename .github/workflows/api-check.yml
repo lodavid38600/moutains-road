@@ -1,0 +1,41 @@
+# Vérifie que les API ouvertes utilisées par le site répondent et acceptent les appels
+# depuis un navigateur (en-tête CORS Access-Control-Allow-Origin).
+name: Vérification des API
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 6 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: API utilisées par le navigateur
+        run: |
+          ORIGIN="https://${{ github.repository_owner }}.github.io"
+          check() {
+            name="$1"; url="$2"
+            out=$(curl -s -o /dev/null -D - -H "Origin: $ORIGIN" -A "MountainsRoad-check" --max-time 30 -w 'HTTP=%{http_code}' "$url")
+            code=$(echo "$out" | grep -o 'HTTP=[0-9]*' | cut -d= -f2)
+            acao=$(echo "$out" | grep -i '^access-control-allow-origin' | tr -d '\r' | cut -d' ' -f2-)
+            printf '%-22s HTTP %s  CORS: %s\n' "$name" "$code" "${acao:-(absent)}"
+          }
+          check "Overpass"          "https://overpass-api.de/api/status"
+          check "Terrain (MNT)"     "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/12/2124/1459.png"
+          check "Open-Meteo"        "https://api.open-meteo.com/v1/forecast?latitude=45.9&longitude=6.9&daily=weather_code&forecast_days=1"
+          check "Open-Meteo altit." "https://api.open-meteo.com/v1/elevation?latitude=45.9&longitude=6.9"
+          check "Wikipedia"         "https://fr.wikipedia.org/api/rest_v1/page/summary/Mont_Blanc"
+          check "Wikidata"          "https://www.wikidata.org/w/api.php?action=wbgetentities&ids=Q583&props=labels&format=json&origin=*"
+          check "Commons"           "https://commons.wikimedia.org/w/api.php?action=query&list=geosearch&gscoord=45.83|6.86&gsradius=1000&gsnamespace=6&format=json&origin=*"
+          check "Nominatim"         "https://nominatim.openstreetmap.org/search?format=jsonv2&q=Chamonix&limit=1"
+          check "Camptocamp wpts"   "https://api.camptocamp.org/waypoints?wtyp=summit&q=Mont%20Blanc&pl=fr&limit=3"
+          check "Camptocamp routes" "https://api.camptocamp.org/routes?w=40845&pl=fr&limit=3"
+      - name: Exemple de réponse Camptocamp
+        run: |
+          curl -s --max-time 30 "https://api.camptocamp.org/waypoints?wtyp=summit&q=Mont%20Blanc&pl=fr&limit=2" | head -c 1500; echo
+          echo ---
+          curl -s --max-time 30 "https://api.camptocamp.org/routes?w=40845&pl=fr&limit=2" | head -c 2500; echo

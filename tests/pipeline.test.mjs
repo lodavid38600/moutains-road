@@ -72,7 +72,7 @@ test('dénivelé : une montée régulière de 1000 m', async () => {
   assert.ok(Math.abs(m.up - 1000) < 15, `up=${m.up}`);
   assert.ok(m.dn < 15);
   assert.equal(m.emax, 2000);
-  assert.ok(m.profile.length > 10 && m.profile.length <= 200);
+  assert.ok(m.profile.length > 10 && m.profile.length <= 400);
   const f = applyMetrics({ k: 'route', km: null, tg: {} }, m);
   assert.equal(f.upSrc, 'mnt');
   assert.ok(f.h > 3 && f.h < 6, `h=${f.h}`);
@@ -136,4 +136,53 @@ test('décodage PNG (filtres 0 à 4, RGB)', () => {
   const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk('IHDR', ihdr), chunk('IDAT', deflateSync(Buffer.from(raw))), chunk('IEND', Buffer.alloc(0))]);
   const out = decodePng(png);
   assert.deepEqual(Buffer.from(out.pixels), px);
+});
+
+test('lieux traversés par un itinéraire, avec leur position sur le profil', async () => {
+  const { mainLines, placesAlong } = await import('../js/lib/along.js');
+  const line = Array.from({ length: 11 }, (_, i) => [45 + i * 0.01, 6]); // ~11 km vers le nord
+  const main = mainLines([line]);
+  const wp = placesAlong(main, [
+    { id: 'sommet', la: 45.05, lo: 6.001 },   // ~80 m du tracé, à mi-parcours
+    { id: 'loin', la: 45.05, lo: 6.02 },      // ~1,6 km : ignoré
+    { id: 'refuge', la: 45.1, lo: 6 },        // à l'arrivée
+  ]);
+  assert.deepEqual(wp.map((w) => w.id), ['sommet', 'refuge']);
+  assert.ok(Math.abs(wp[0].km - 5.56) < 0.1, `km=${wp[0].km}`);
+});
+
+test('voies d’ascension : plusieurs départs distincts, sans doublon', async () => {
+  const { findAscents } = await import('../js/lib/ascent.js');
+  // Sommet en (45.05, 6.05). Trois sentiers : nord (parking N), sud (refuge S),
+  // et un prolongement du sentier nord vers un second parking plus loin (doit être écarté).
+  let nid = 1;
+  const nodes = [];
+  const way = (id, pts, tags) => {
+    const ids = pts.map((p) => {
+      const found = nodes.find((n) => n.la === p[0] && n.lo === p[1]);
+      if (found) return found.id;
+      const n = { id: nid++, la: p[0], lo: p[1] }; nodes.push(n); return n.id;
+    });
+    return { type: 'way', id, nodes: ids, geometry: pts.map(([lat, lon]) => ({ lat, lon })), tags: { highway: 'path', ...tags } };
+  };
+  const line = (a, b, n = 10) => Array.from({ length: n + 1 }, (_, i) => [+(a[0] + (b[0] - a[0]) * i / n).toFixed(6), +(a[1] + (b[1] - a[1]) * i / n).toFixed(6)]);
+  const S = [45.05, 6.05];
+  const json = { elements: [
+    way(1, line([45.08, 6.05], S), { sac_scale: 'mountain_hiking' }),
+    way(2, line([45.02, 6.05], S), { sac_scale: 'alpine_hiking' }),
+    way(3, line([45.10, 6.05], [45.08, 6.05]), {}),
+    { type: 'node', id: 900, lat: 45.0801, lon: 6.0501, tags: { amenity: 'parking', name: 'Parking du Nord' } },
+    { type: 'node', id: 901, lat: 45.1001, lon: 6.0501, tags: { amenity: 'parking' } },
+    { type: 'node', id: 902, lat: 45.0201, lon: 6.0499, tags: { tourism: 'alpine_hut', name: 'Refuge du Sud' } },
+    { type: 'node', id: 903, lat: 45.09, lon: 6.06, tags: { place: 'village', name: 'Villard' } },
+  ] };
+  const dem = { many: async (pts) => pts.map(([la]) => 1000 + (0.05 - Math.abs(la - 45.05)) * 30000) };
+  const { ascents } = await findAscents({ la: 45.05, lo: 6.05, e: 2500 }, json, dem);
+  const names = ascents.map((a) => a.start.name).sort();
+  assert.deepEqual(names, ['Parking du Nord', 'Refuge du Sud']);
+  const sud = ascents.find((a) => a.start.kind === 'hut');
+  assert.equal(sud.t, 4);
+  assert.ok(sud.up > 800 && sud.up < 1000, `D+=${sud.up}`);
+  assert.ok(sud.km > 3 && sud.km < 3.6, `km=${sud.km}`);
+  assert.ok(sud.profile.at(-1)[1] > sud.profile[0][1], 'le profil va du départ vers le sommet');
 });
