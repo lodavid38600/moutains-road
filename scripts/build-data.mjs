@@ -181,6 +181,16 @@ log(`Total : ${all.length} objets`);
       });
       attached++;
     }
+    // Sommet dont toutes les voies Camptocamp relèvent de l'alpinisme ou de l'escalade (aucune voie
+    // de randonnée) et dont le meilleur sentier est déjà alpin : c'est un sommet d'alpinisme.
+    const HIKE = new Set(['hiking', 'snowshoeing', 'mountain_biking']);
+    const CLIMB = new Set(['mountain_climbing', 'snow_ice_mixed', 'rock_climbing', 'ice_climbing']);
+    for (const f of all) {
+      if (!f.c2c?.length || !['peak', 'volcano'].includes(f.k)) continue;
+      const acts = f.c2c.flatMap((r) => r.a || []);
+      if (acts.some((a) => HIKE.has(a)) || !acts.some((a) => CLIMB.has(a))) continue;
+      if (!f.acc?.t || f.acc.t >= 4 || f.e >= 4000) { f.c = 'alpinisme'; f.c2cAlpi = 1; }
+    }
     for (const f of all) if (f.c2c) {
       f.c2c.sort((a, b) => (qualityRank(b.q) - qualityRank(a.q)) || ((a.up || 9999) - (b.up || 9999)));
       f.nc = f.c2c.length;
@@ -250,7 +260,7 @@ for (const [k, obj] of geomTiles) await writeJson(join(DATA_DIR, 'geom', `${k}.j
 log(`${geoms.size} tracés (${geomTiles.size} fichiers)`);
 
 // Catalogues par massif (page Explorer) : champs utiles aux listes et aux filtres.
-const CAT_KEYS = ['id', 'k', 'n', 'la', 'lo', 'e', 'emax', 'emin', 'c', 't', 'vf', 'km', 'up', 'dn', 'h', 'net', 'ref', 'loop', 'img', 'sl', 'pr', 'rg', 'cc', 'r', 'nr', 'np', 'nc', 'gm', 'sp'];
+const CAT_KEYS = ['c2cAlpi', 'id', 'k', 'n', 'la', 'lo', 'e', 'emax', 'emin', 'c', 't', 'vf', 'km', 'up', 'dn', 'h', 'net', 'ref', 'loop', 'img', 'sl', 'pr', 'rg', 'cc', 'r', 'nr', 'np', 'nc', 'gm', 'sp'];
 const catEntry = (f) => {
   const o = {};
   for (const k of CAT_KEYS) if (f[k] != null) o[k] = f[k];
@@ -282,13 +292,16 @@ await writeJson(join(DATA_DIR, 'overview.json'), overview);
 log(`Vue d'ensemble : ${overview.length} objets`);
 
 // Index de recherche : [id, nom, type, lat, lon, alt, catégorie] rangé par initiale de chaque mot.
+// Clé d'index : deux premiers caractères du mot (fichiers de quelques centaines de Ko).
+const searchKey = (w) => (/^[a-z0-9]{2}/.test(w) ? w.slice(0, 2) : /[a-z]/.test(w[0]) ? w[0] : '0');
 const STOP = new Set(['de', 'du', 'des', 'la', 'le', 'les', 'l', 'd', 'et', 'di', 'del', 'della', 'the', 'of', 'a', 'au', 'aux']);
 const search = new Map();
 for (const f of all) {
   if (!f.n) continue;
   const entry = [f.id, f.n, f.k, f.la, f.lo, f.e ?? f.emax ?? null, f.c ?? null, f.sl ?? 0, f.km ?? null, f.up ?? null];
+  while (entry.length > 5 && entry[entry.length - 1] == null) entry.pop();
   const initials = new Set();
-  for (const w of norm(f.n).split(' ')) if (w && !STOP.has(w)) initials.add(/[a-z]/.test(w[0]) ? w[0] : '0');
+  for (const w of norm(f.n).split(' ')) if (w && !STOP.has(w)) initials.add(searchKey(w));
   for (const i of initials) {
     if (!search.has(i)) search.set(i, []);
     search.get(i).push(entry);

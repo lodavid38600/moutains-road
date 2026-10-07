@@ -210,6 +210,7 @@ export function classify(f) {
     return f;
   }
   if (f.k === 'peak' || f.k === 'volcano' || f.k === 'col') {
+    if (f.c2cAlpi) { f.c = 'alpinisme'; return f; } // voies Camptocamp toutes d'alpinisme
     if (f.acc) {
       if (f.acc.t) f.c = categoryFromSac(f.acc.t);
       else if (f.acc.vf != null) f.c = 'ferrata';

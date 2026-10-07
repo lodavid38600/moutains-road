@@ -186,3 +186,11 @@ test('voies d’ascension : plusieurs départs distincts, sans doublon', async (
   assert.ok(sud.km > 3 && sud.km < 3.6, `km=${sud.km}`);
   assert.ok(sud.profile.at(-1)[1] > sud.profile[0][1], 'le profil va du départ vers le sommet');
 });
+
+test('sommet dont toutes les voies sont d’alpinisme', async () => {
+  const { classify } = await import('../js/lib/normalize.js');
+  const f = classify({ k: 'peak', n: 'Mont Blanc', e: 4807, acc: { nw: 2, t: 4 }, c2cAlpi: 1 });
+  assert.equal(f.c, 'alpinisme');
+  assert.equal(plainDifficulty(f), null);
+  assert.equal(accessSentence(f).text, 'Sommet d’alpinisme');
+});

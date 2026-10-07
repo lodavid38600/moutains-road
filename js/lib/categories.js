@@ -55,6 +55,7 @@ export function plainDifficulty(f) {
   if ((f.k === 'ferrata' || f.c === 'ferrata') && f.vf != null) {
     return { code: FERRATA_SCALE[f.vf].split(' ')[0], text: FERRATA_PLAIN[f.vf] };
   }
+  if (f.c2cAlpi) return null; // la cotation d'un sentier d'approche induirait en erreur
   const t = f.t || f.acc?.t;
   if (!t) return null;
   return { code: SAC_BY_T[t].code, text: SAC_BY_T[t].plain };
@@ -63,6 +64,9 @@ export function plainDifficulty(f) {
 /** Phrase d'accès à un sommet, en langage courant. */
 export function accessSentence(f) {
   const a = f.acc;
+  if (f.c2cAlpi) {
+    return { c: 'alpinisme', text: 'Sommet d’alpinisme', detail: `Toutes les voies connues demandent matériel et expérience d’alpinisme${a?.t ? ` (un sentier ${SAC_BY_T[a.t].code} approche le sommet)` : ''}` };
+  }
   if (!a) return null;
   if (a.t) {
     const s = SAC_BY_T[a.t];
