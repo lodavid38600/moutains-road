@@ -296,15 +296,19 @@ log(`Vue d'ensemble : ${overview.length} objets`);
 const searchKey = (w) => (/^[a-z0-9]{2}/.test(w) ? w.slice(0, 2) : /[a-z]/.test(w[0]) ? w[0] : '0');
 const STOP = new Set(['de', 'du', 'des', 'la', 'le', 'les', 'l', 'd', 'et', 'di', 'del', 'della', 'the', 'of', 'a', 'au', 'aux']);
 const search = new Map();
+// Premier passage : taille des paquets à deux lettres ; les plus gros sont redécoupés sur trois lettres.
+const wordsOf = (f) => [...new Set(norm(f.n).split(' ').filter((w) => w && !STOP.has(w)))];
+const size2 = new Map();
+for (const f of all) if (f.n) for (const w of wordsOf(f)) { const k = searchKey(w); size2.set(k, (size2.get(k) || 0) + 1); }
+const BIG = new Set([...size2].filter(([, n]) => n > 15000).map(([k]) => k));
+const keyOf = (w) => { const k = searchKey(w); return BIG.has(k) && /^[a-z0-9]{3}/.test(w) ? w.slice(0, 3) : k; };
 for (const f of all) {
   if (!f.n) continue;
   const entry = [f.id, f.n, f.k, f.la, f.lo, f.e ?? f.emax ?? null, f.c ?? null, f.sl ?? 0, f.km ?? null, f.up ?? null];
   while (entry.length > 5 && entry[entry.length - 1] == null) entry.pop();
-  const initials = new Set();
-  for (const w of norm(f.n).split(' ')) if (w && !STOP.has(w)) initials.add(searchKey(w));
-  for (const i of initials) {
-    if (!search.has(i)) search.set(i, []);
-    search.get(i).push(entry);
+  for (const k of new Set(wordsOf(f).map(keyOf))) {
+    if (!search.has(k)) search.set(k, []);
+    search.get(k).push(entry);
   }
 }
 for (const [i, list] of search) {

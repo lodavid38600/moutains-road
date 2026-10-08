@@ -207,8 +207,11 @@ export async function search(q, limit = 12) {
   }
   const w0 = words[0];
   // Même découpage que l'assemblage : deux premiers caractères (ou un seul pour un mot d'une lettre).
-  const key = /^[a-z0-9]{2}/.test(w0) ? w0.slice(0, 2) : /[a-z]/.test(w0[0]) ? w0[0] : '0';
-  if ((await loadMeta())?.searchKeys?.includes(key)) {
+  const key2 = /^[a-z0-9]{2}/.test(w0) ? w0.slice(0, 2) : /[a-z]/.test(w0[0]) ? w0[0] : '0';
+  const keys = (await loadMeta())?.searchKeys || [];
+  // Les paquets très fournis (« mon… ») sont découpés sur trois lettres.
+  const key = w0.length >= 3 && keys.includes(w0.slice(0, 3)) ? w0.slice(0, 3) : key2;
+  if (keys.includes(key)) {
     if (!searchCache.has(key)) searchCache.set(key, fetchJson(`data/search/${key}.json`).catch(() => []));
     for (const [id, n, k, la, lo, e, c, sl, km, up] of await searchCache.get(key)) {
       if (results.size >= 400) break;
